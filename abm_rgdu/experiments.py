@@ -110,6 +110,14 @@ def run_seed(p, seed, branch_list):
     quarters = records[branch_list[0]].quarters
     at = [quarters.index(q) for q in report]
 
+    paths = []
+    for b, by_cell in ser.items():
+        total = by_cell[(ALL, ALL)]
+        for i, q in enumerate(quarters):
+            paths.append({"seed": seed, **_branch(b), "quarter": q,
+                          **{k: float(total[k][i]) for k in ("employment", "machines_ordered", "price_index",
+                                                             "unemployment_rate", "partial_public_balance")}})
+
     levels = []
     for b, by_cell in ser.items():
         for (market, size), s in by_cell.items():
@@ -153,7 +161,7 @@ def run_seed(p, seed, branch_list):
 
     drift = _drift(seed, burn, records.get(sim.Branch(1.0, False, False)))
     stats = _validation_stats(records.get(sim.Branch(1.0, False, False)), state)
-    return {"levels": levels, "effects": effects, "drift": drift, "stats": stats}
+    return {"levels": levels, "paths": paths, "effects": effects, "drift": drift, "stats": stats}
 
 
 def _branch(b):
@@ -264,6 +272,27 @@ def grid(p, seeds, workers=1):
     return rows
 
 
+def competition_income(p, seeds, workers=1):
+    """The reform with and without income feedback, at three levels of price sensitivity."""
+    alpha = p["experiments"]["grid"]["alpha"]
+    branch_list = [sim.Branch(a, tech, fb) for fb in (False, True) for tech in (True, False) for a in (1.0, alpha)]
+    rows = []
+    for eta in p["experiments"]["grid"]["eta"]:
+        q = prm.override(p, {"demand.eta": eta, "experiments.alphas": [1.0, alpha],
+                             "experiments.report_at": [p["simulation"]["quarters"]]})
+        effects = [e for r in run_many(q, seeds, branch_list, workers) for e in r["effects"]
+                   if e["market"] == ALL and e["size"] == ALL]
+        for fb in (False, True):
+            sel = [e for e in effects if e["feedback"] == fb]
+            rows.append({"eta": eta, "feedback": fb, "alpha": alpha, "quarter": p["simulation"]["quarters"],
+                         "seeds": len(sel),
+                         "dE_tech_pct": 100 * float(np.mean([e["dE_tech"] / e["employment_ref_tech"] for e in sel])),
+                         "dE_without_pct": 100 * float(np.mean([e["dE_without"] / e["employment_ref_without"]
+                                                                for e in sel])),
+                         "uncertainty": HYPOTHESES})
+    return rows
+
+
 def write_csv(path, rows, p, note=None):
     """Every output file opens with the status of the parameters behind it."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -284,6 +313,7 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, default=prm.DEFAULT_PATH)
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--grid", action="store_true", help="also run the hypothesis grid (slow)")
+    parser.add_argument("--figures", action="store_true", help="draw the figures from the outputs")
     args = parser.parse_args(argv)
 
     p = prm.load(args.params)
@@ -296,6 +326,8 @@ def main(argv=None):
     write_csv(out / "registry.csv", prm.registry_rows(p), p, "status of every parameter family: R rule, E checked estimate, H hypothesis")
     write_csv(out / "levels.csv", levels, p, f"rows with market or size 'all' are totals of a {SAMPLE}")
     write_csv(out / "effects.csv", effects, p, "paired gaps, seed by seed; balance = partial public balance")
+    write_csv(out / "paths.csv", [r for res in results for r in res["paths"]], p,
+              f"quarter by quarter, totals of a {SAMPLE}")
     numeric = [k for k in effects[0] if k not in ("seed", "alpha", "feedback", "quarter", "market", "size")]
     write_csv(out / "effects_summary.csv", summarize(effects, ["alpha", "feedback", "quarter", "market", "size"], numeric),
               p, f"spread across seeds: {SEEDS_ONLY}; it says nothing of the hypotheses")
@@ -306,8 +338,14 @@ def main(argv=None):
     stats = {k: float(np.mean([res["stats"][k] for res in results])) for k in results[0]["stats"]}
     write_csv(out / "validation.csv", validate(stats, observations), p, "held-out observations, never used to calibrate")
     if args.grid:
-        write_csv(out / "grid.csv", grid(p, range(e["grid"]["seeds"]), args.workers), p,
+        grid_seeds = range(e["grid"]["seeds"])
+        write_csv(out / "grid.csv", grid(p, grid_seeds, args.workers), p,
                   f"{HYPOTHESES}: each row is one set of unidentified parameters")
+        write_csv(out / "competition_income.csv", competition_income(p, grid_seeds, args.workers), p,
+                  f"{HYPOTHESES}: price sensitivity of customers × income feedback")
+    if args.figures:
+        from . import figures
+        figures.make_all(out, p)
     print(f"{prm.status(p)}: {len(seeds)} seeds written to {out}/")
 
 

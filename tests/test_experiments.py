@@ -111,3 +111,22 @@ def test_feedback_branches_are_paired_with_their_own_reference():
         ref = _level(res | {"levels": [r for r in res["levels"] if r["feedback"] == fb]}, 1.0, False, 8)
         pol = _level(res | {"levels": [r for r in res["levels"] if r["feedback"] == fb]}, 0.8, False, 8)
         assert e["dE_without"] == pol["employment"] - ref["employment"]
+
+
+def test_all_six_figures_are_drawn_and_labelled(tmp_path):
+    from abm_rgdu import figures
+
+    p = small_world(**FAST, **{"experiments.alphas": [1.0, 0.9, 0.8], "experiments.grid.seeds": 1,
+                               "experiments.grid.unit_cost": [20000.0, 80000.0],
+                               "experiments.grid.automatable_scale": [1.0], "experiments.grid.eta": [0.0, 2.0]})
+    param_file = tmp_path / "params.json"
+    param_file.write_text(json.dumps(p), encoding="utf-8")
+    ex.main(["--seeds", "1", "--out", str(tmp_path / "out"), "--params", str(param_file), "--workers", "1",
+             "--grid", "--figures"])
+    drawn = sorted(path.name for path in (tmp_path / "out" / "figures").glob("*.png"))
+    assert drawn == ["1_employment.png", "2_adoptions.png", "3_frontier.png", "4_competition_income.png",
+                     "5_balance.png", "6_sign_maps.png"]
+    grid = (tmp_path / "out" / "grid.csv").read_text(encoding="utf-8")
+    assert grid.startswith(f"# {params.status(p)}") and ex.HYPOTHESES in grid
+    costs = figures.break_even_costs(p, [1.0, 0.8], figures.payroll.Profile(False, 0, 0.02))
+    assert np.all(costs[1, :3] > costs[0, :3]) and costs[1, 3] == pytest.approx(costs[0, 3])
