@@ -42,6 +42,42 @@
       "source": "target: S4, once gross (not net) distributions are at hand",
       "verified": false,
       "note": "Representative gross wage of each band, in reference SMIC. S4 publishes net amounts, which are not converted here."
+    },
+    "population": {
+      "status": "H",
+      "source": "convention of the spec: 4 markets × 3 sizes × 10 replications",
+      "verified": false,
+      "note": "An experimental sample, uniform over the 12 cells: not representative of France. Results are read by market × size."
+    },
+    "markets.va_rate": {
+      "status": "E",
+      "source": "S3, Ésane 2023",
+      "verified": true,
+      "note": "'Industrie' stands in for manufacturing; the two perimeters are close but not identical."
+    },
+    "markets.structure": {
+      "status": "H",
+      "source": "no source; structural assumptions to sweep",
+      "verified": false,
+      "note": "Routine share of work, automatable share θ, band mix by task, AT/MP rate."
+    },
+    "sizes.headcount": {
+      "status": "H",
+      "source": "convention; the 50+ class is stylized at 50 to 250 posts",
+      "verified": false,
+      "note": "Large firms here are not national groups."
+    },
+    "sizes.margins_cash": {
+      "status": "H",
+      "source": "target: S2 (quartiles of EBE/VA and of cash by size); market shift from S3 once checked",
+      "verified": false,
+      "note": "Crossing size and market is itself an assumption, for want of a joint table. Margin and cash are drawn through a Gaussian copula."
+    },
+    "costs.fixed_share_ci": {
+      "status": "H",
+      "source": "no source",
+      "verified": false,
+      "note": "Share of intermediate consumption that does not move with output (rent, overheads)."
     }
   },
   "rgdu": {
@@ -79,5 +115,35 @@
   "bands": {
     "bounds_smic": [1.0, 1.3, 2.0, 3.0],
     "gross_smic": [1.12, 1.6, 2.4, 3.6]
+  },
+  "population": {
+    "replications": 10,
+    "margin_bounds": [0.02, 0.6],
+    "cash_months_max": 12.0,
+    "margin_cash_correlation": 0.5
+  },
+  "markets": {
+    "names": ["manufacturing", "trade", "accommodation_food", "business_services"],
+    "va_rate": [0.239, 0.157, 0.415, 0.52],
+    "routine_share": [0.55, 0.45, 0.40, 0.30],
+    "automatable_mean": [0.50, 0.40, 0.25, 0.45],
+    "automatable_concentration": 10.0,
+    "at_mp_rate": [0.022, 0.017, 0.024, 0.010],
+    "margin_shift": [0.0, -0.02, -0.03, 0.01],
+    "band_mix": {
+      "A": [[0.35, 0.40, 0.18, 0.07], [0.55, 0.30, 0.10, 0.05], [0.70, 0.22, 0.06, 0.02], [0.30, 0.35, 0.25, 0.10]],
+      "B": [[0.10, 0.35, 0.35, 0.20], [0.20, 0.35, 0.30, 0.15], [0.45, 0.35, 0.15, 0.05], [0.10, 0.25, 0.35, 0.30]]
+    },
+    "band_mix_concentration": 30.0
+  },
+  "sizes": {
+    "names": ["2-9", "10-49", "50-250"],
+    "headcount": [[2, 9], [10, 49], [50, 250]],
+    "large": [false, false, true],
+    "margin_quartiles": [[0.05, 0.17, 0.30], [0.06, 0.15, 0.26], [0.08, 0.17, 0.28]],
+    "cash_months_quartiles": [[0.5, 1.5, 3.5], [0.7, 1.8, 3.5], [0.8, 2.0, 4.0]]
+  },
+  "costs": {
+    "fixed_share_ci": 0.2
   }
 }
