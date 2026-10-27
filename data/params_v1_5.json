@@ -120,6 +120,12 @@
       "source": "no observed price: a grid of costs per A post of capacity, swept",
       "verified": false,
       "note": "One option per firm, sized to the automatable share of its initial A work. Cost, delay, maintenance, transition and lifetime are set independently of wages, and are identical in reference and reform."
+    },
+    "experiments": {
+      "status": "H",
+      "source": "plan of experiments of the spec, section 8",
+      "verified": false,
+      "note": "α = 1, 0.9, 0.8, with α = 0 as a separate stress test; outputs at 2, 4 and 8 quarters; the grid crosses tech cost, automatable share and price sensitivity."
     }
   },
   "rgdu": {
@@ -231,5 +237,18 @@
     "lifetime": 20,
     "npv_horizon": 16,
     "npv_threshold": 0.0
+  },
+  "experiments": {
+    "seeds": 10,
+    "alphas": [1.0, 0.9, 0.8],
+    "stress_alpha": 0.0,
+    "report_at": [2, 4, 8],
+    "grid": {
+      "seeds": 2,
+      "alpha": 0.8,
+      "unit_cost": [40000.0, 80000.0, 160000.0],
+      "automatable_scale": [0.5, 1.0, 1.5],
+      "eta": [0.0, 2.0, 5.0]
+    }
   }
 }

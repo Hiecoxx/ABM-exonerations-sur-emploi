@@ -1,0 +1,21 @@
+{
+  "note": "Held-out observations. None of them sets a parameter. Each counts only once checked against its source; until then the report says 'not verified'.",
+  "observations": {
+    "quarterly_hire_rate": {
+      "source": "S5, Dares, mouvements de main-d'œuvre: hires over employment, on a field comparable to stable posts",
+      "low": null, "high": null, "verified": false
+    },
+    "quarterly_exit_rate": {
+      "source": "S5, Dares: exits over employment, same field",
+      "low": null, "high": null, "verified": false
+    },
+    "unemployment_rate": {
+      "source": "INSEE, ILO unemployment rate, for the occupations behind each pool",
+      "low": null, "high": null, "verified": false
+    },
+    "initial_margin_median": {
+      "source": "S2, INSEE Panorama 2023: median EBE/VA across the four markets and three sizes",
+      "low": null, "high": null, "verified": false
+    }
+  }
+}
