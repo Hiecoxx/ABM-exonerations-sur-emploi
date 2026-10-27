@@ -17,6 +17,9 @@ dev = ["pytest>=8"]
 [tool.setuptools]
 packages = ["abm_rgdu"]
 
+[tool.setuptools.package-data]
+abm_rgdu = ["live.html"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

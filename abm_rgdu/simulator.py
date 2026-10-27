@@ -97,21 +97,35 @@ def initial_state(p, seed):
 def burn_in(state):
     """Quarters before the reform, at α = 1 and with no investment, common to all branches."""
     records = Records()
+    for _ in burn_in_steps(state, records):
+        pass
+    return records
+
+
+def burn_in_steps(state, records):
+    """The burn-in, one quarter at a time: yields each quarter once it is recorded."""
     branch = Branch()
     _prepare(state, branch)
     while state.t < 0:
         step(state, branch, records, invest=False)
+        yield state.t
     state.income_ref = state.income_last
-    return records
 
 
 def run(state, branch):
     """Quarters 1 … T of one branch. The state is consumed: pass a copy."""
     records = Records()
+    for _ in run_steps(state, branch, records):
+        pass
+    return records
+
+
+def run_steps(state, branch, records):
+    """One branch, one quarter at a time, for whoever wants to watch it unfold."""
     _prepare(state, branch)
     while state.t < state.params["simulation"]["quarters"]:
         step(state, branch, records, invest=branch.technology)
-    return records
+        yield state.t
 
 
 def run_branches(state, branches):

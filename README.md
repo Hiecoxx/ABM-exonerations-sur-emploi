@@ -54,17 +54,50 @@ If the sign of ΔE turns with a parameter that is not identified, the honest con
 
 ## Running it
 
+You need Python 3.11 or later and git. Nothing else is installed system-wide: everything goes into a `.venv` folder inside the project.
+
+On macOS or Linux:
+
+    git clone https://github.com/Hiecoxx/ABM-exon-rations-emploi.git
+    cd ABM-exon-rations-emploi
     python3 -m venv .venv
     .venv/bin/pip install -e ".[dev]"
     .venv/bin/pytest
+    .venv/bin/python -m abm_rgdu.live --open
     .venv/bin/python -m abm_rgdu.experiments --seeds 10 --out results/ --figures
     .venv/bin/python -m abm_rgdu.experiments --seeds 10 --out results/ --grid --figures   # adds the hypothesis grid
 
+On Windows, in PowerShell, the same steps read:
+
+    py -m venv .venv
+    .venv\Scripts\pip install -e ".[dev]"
+    .venv\Scripts\python -m abm_rgdu.live --open
+    .venv\Scripts\python -m abm_rgdu.experiments --seeds 10 --out results/ --figures
+
 A seed takes about a minute of one core, mostly spent on investment projections. Seeds run in parallel (`--workers`). The grid is several times longer.
+
+## Watching a run live
+
+    .venv/bin/python -m abm_rgdu.live --open
+
+This opens a page in your browser, served from your own computer and working offline. Press **Run** and one seed unfolds quarter by quarter. First comes the shared burn-in, then the reference and the reform side by side, from the same draws.
+
+- **What you see:**
+  - employment, and its gap with the reference;
+  - unemployment, the price index, machines ordered and the partial public balance;
+  - the gap by market and size;
+  - a log of what happens: machines ordered or refused for want of credit, notices given, closures.
+- **What you control:**
+  - α, technology possible or not, budgets that follow income or not;
+  - the seed, the horizon and the burn-in;
+  - the pace of the display, with Pause, Step and Stop.
+- **Every other parameter** is under *All parameters*, with its status badge. Changes apply to the next run and are marked until you go back to the file's values. *Save a copy* writes them to `results/params/<name>.json`, to be reused with `--params`.
+
+The page shows one seed, so what moves on it includes random draws: it is for understanding a mechanism, not for reporting a number. The same `--params`, `--set`, `--quarters` and `--burn-in` options set what the page starts from, and `--port` changes the port (8050 by default).
 
 ## Changing parameters and time
 
-Every parameter sits in `data/params_v1_5.json`, under the name you see there. It can be changed in two ways, from the lightest to the most lasting.
+Every parameter sits in `data/params_v1_5.json`, under the name you see there. It can be changed in three ways.
 
 - **For one run, on the command line.** Name the parameter by its section and key. Values are read as JSON, so numbers, lists and `true`/`false` work as written:
 
@@ -74,6 +107,7 @@ Every parameter sits in `data/params_v1_5.json`, under the name you see there. I
 
   `--quarters` is the horizon after the reform; `--burn-in` is the number of shared quarters at α = 1 before it. A misspelt name is refused rather than silently ignored.
 - **In a copy of the file**, passed with `--params my_params.json`. This is the right place for a set of hypotheses you mean to keep, with its notes and statuses.
+- **On the live page**, for any parameter, before each run; a copy can be saved from there.
 
 Outputs are reported at 2, 4 and 8 quarters, or at whatever `experiments.report_at` says, within the horizon; the last quarter is always included.
 

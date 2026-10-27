@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ABM RGDU live</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --raised: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11, 11, 11, 0.10);
+  --ref: #898781; --pol: #2a78d6;
+  --neg: #2a78d6; --pos: #e34948; --mid: #f0efec;
+  --accent: #2a78d6; --invalid: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --raised: #232322;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.10);
+    --ref: #898781; --pol: #3987e5;
+    --neg: #3987e5; --pos: #e66767; --mid: #383835;
+    --accent: #3987e5; --invalid: #e66767;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 12px; }
+h1 { font-size: 18px; font-weight: 600; margin: 0; }
+h2 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+h3 { font-size: 13px; font-weight: 600; margin: 0; }
+.status { color: var(--ink-2); font-size: 12px; }
+.muted { color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; }
+.controls label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--ink-2); }
+.controls .check { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 6px; }
+input, select, textarea, button { font: inherit; color: var(--ink); }
+input[type=number], input[type=text], select, textarea { background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+input[type=number] { width: 84px; }
+input[type=range] { width: 140px; }
+textarea { width: 100%; min-height: 64px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+button { background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #ffffff; font-weight: 600; }
+button:disabled { opacity: 0.45; cursor: default; }
+.buttons { display: flex; gap: 6px; }
+.progress { font-size: 12px; color: var(--ink-2); padding-bottom: 6px; min-width: 160px; }
+details > summary { cursor: pointer; font-weight: 600; }
+.form-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.form-tools input[type=text] { width: 220px; }
+.sections { columns: 2 420px; column-gap: 16px; }
+.section { break-inside: avoid; margin: 0 0 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.section h3 { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.field { display: grid; grid-template-columns: minmax(140px, 1fr) 1.4fr; gap: 6px; align-items: center; padding: 2px 0; font-size: 12px; }
+.field.wide { grid-template-columns: 1fr; }
+.field > span { color: var(--ink-2); overflow-wrap: anywhere; }
+.field input[type=text], .field input[type=number], .field select { width: 100%; }
+.field.changed > span { color: var(--ink); font-weight: 600; }
+.field.changed > span::after { content: " ●"; color: var(--accent); }
+.field.invalid input, .field.invalid textarea { border-color: var(--invalid); }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--ink-2); text-align: center; }
+.message { font-size: 12px; color: var(--ink-2); }
+.message.error { color: var(--invalid); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.tile .label { font-size: 12px; color: var(--ink-2); }
+.tile .value { font-size: 26px; font-weight: 600; margin: 2px 0; }
+.tile .sub { font-size: 12px; color: var(--muted); }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-bottom: 12px; }
+figure.card { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 6px; }
+figure.card .sub { font-size: 11px; color: var(--muted); margin: 1px 0 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); min-height: 18px; }
+.legend span, .tip .row { display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
+.key.ref { background: var(--ref); } .key.pol { background: var(--pol); }
+.plot { position: relative; outline: none; }
+.plot:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 4px; }
+svg { display: block; width: 100%; overflow: visible; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.baseline { stroke: var(--axis); stroke-width: 1; }
+.tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.marker-line { stroke: var(--axis); stroke-width: 1; }
+.marker-text { fill: var(--muted); font-size: 10px; }
+.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.line.ref { stroke: var(--ref); } .line.pol { stroke: var(--pol); }
+.dot { stroke: var(--surface); stroke-width: 2; }
+.dot.ref { fill: var(--ref); } .dot.pol { fill: var(--pol); }
+.cross { stroke: var(--ink-2); stroke-width: 1; }
+.empty { fill: var(--muted); font-size: 12px; }
+.tip { position: absolute; top: 0; pointer-events: none; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); white-space: nowrap; z-index: 2; }
+.tip .head { color: var(--muted); margin-bottom: 2px; }
+.tip strong { font-variant-numeric: tabular-nums; }
+.tip .name { color: var(--ink-2); }
+.lower { display: grid; grid-template-columns: minmax(300px, 1.1fr) minmax(300px, 1fr); gap: 12px; }
+@media (max-width: 760px) { .lower { grid-template-columns: 1fr; } }
+table { border-collapse: collapse; font-size: 12px; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-2); font-weight: 600; }
+.cells td.v { text-align: center; color: var(--ink); }
+.cells td.v.strong { color: #ffffff; }
+.table-wrap { overflow-x: auto; }
+ol.log { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; font-size: 12px; }
+ol.log li { padding: 3px 0; border-bottom: 1px solid var(--grid); }
+ol.log .q { color: var(--muted); display: inline-block; min-width: 74px; }
+ol.log .b { color: var(--ink-2); display: inline-block; min-width: 72px; }
+footer { color: var(--muted); font-size: 12px; margin: 8px 0 24px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ABM RGDU · live</h1>
+    <span class="status" id="status">loading parameters…</span>
+  </header>
+
+  <section class="panel" aria-label="Run">
+    <div class="controls">
+      <label>α, share of the RGDU kept
+        <input type="number" id="alpha" min="0" max="1" step="0.05" value="0.8">
+      </label>
+      <label class="check"><input type="checkbox" id="technology" checked> technology possible</label>
+      <label class="check"><input type="checkbox" id="feedback"> budgets follow income</label>
+      <label>seed <input type="number" id="seed" min="0" step="1" value="0"></label>
+      <label>quarters after the reform <input type="number" min="1" step="1" data-path="simulation.quarters" data-kind="int" id="quarters"></label>
+      <label>burn-in quarters <input type="number" min="0" step="1" data-path="simulation.burn_in" data-kind="int" id="burn_in"></label>
+      <label>pace, <span id="pace-label">400 ms</span> per quarter
+        <input type="range" id="pace" min="0" max="2000" step="50" value="400">
+      </label>
+      <div class="buttons">
+        <button class="primary" id="run">Run</button>
+        <button id="pause" disabled>Pause</button>
+        <button id="step" disabled>Step</button>
+        <button id="stop" disabled>Stop</button>
+      </div>
+      <div class="progress" id="progress">not started</div>
+    </div>
+    <p class="message error" id="run-error" hidden></p>
+  </section>
+
+  <section class="panel">
+    <details id="params-panel">
+      <summary>All parameters <span class="muted" id="changed-count"></span></summary>
+      <div class="form-tools">
+        <input type="text" id="filter" placeholder="filter, e.g. eta or technology" aria-label="Filter parameters">
+        <button id="reset">Back to the file's values</button>
+        <input type="text" id="save-name" value="my_params" aria-label="Name of the copy">
+        <button id="save">Save a copy</button>
+        <span class="message" id="save-message"></span>
+      </div>
+      <p class="message">Changes apply to the next run. Badges give each family's status: R official rule, E checked estimate, H hypothesis. Lists are comma-separated; boxes in monospace take JSON.</p>
+      <div class="sections" id="sections"></div>
+    </details>
+  </section>
+
+  <section class="tiles" aria-label="Quarter just run">
+    <div class="tile"><div class="label">Employment gap, reform − reference</div><div class="value" id="tile-gap">–</div><div class="sub" id="tile-gap-sub">persons</div></div>
+    <div class="tile"><div class="label">Unemployment rate gap</div><div class="value" id="tile-u">–</div><div class="sub" id="tile-u-sub">percentage points</div></div>
+    <div class="tile"><div class="label">Machines added by the reform</div><div class="value" id="tile-m">–</div><div class="sub" id="tile-m-sub">orders since the reform</div></div>
+    <div class="tile"><div class="label">Partial public balance, reform − reference</div><div class="value" id="tile-b">–</div><div class="sub" id="tile-b-sub">M€ per quarter</div></div>
+  </section>
+
+  <section class="charts" id="charts" aria-label="Charts"></section>
+
+  <section class="lower">
+    <div class="panel">
+      <h2>Employment gap by market and size</h2>
+      <p class="message">Reform − reference, in persons, in the quarter just run. Blue: fewer jobs; red: more.</p>
+      <div class="table-wrap"><table class="cells" id="cells"></table></div>
+    </div>
+    <div class="panel">
+      <h2>What happens</h2>
+      <ol class="log" id="log"></ol>
+    </div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Table of every series</summary>
+      <div class="table-wrap"><table id="data"></table></div>
+    </details>
+  </section>
+
+  <footer>One seed: what moves here includes random draws. Results meant to be reported go through <code>python -m abm_rgdu.experiments</code>, over many seeds. The partial public balance leaves out employee contributions, CSG, taxes and most benefits.</footer>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const SVG = "http://www.w3.org/2000/svg";
+const ENUMS = { "finance.credit_mode": ["free", "central", "rationed"], "technology.cost_path": ["stable", "moderate", "fast"] };
+const LOCKED = new Set(["simulation.quarters", "simulation.burn_in"]);  // shown in the run bar
+// Registry families whose name is not a parameter path.
+const FAMILY = {
+  "markets.names": "markets.structure", "markets.routine_share": "markets.structure",
+  "markets.automatable_mean": "markets.structure", "markets.automatable_concentration": "markets.structure",
+  "markets.at_mp_rate": "markets.structure", "markets.band_mix": "markets.structure",
+  "markets.band_mix_concentration": "markets.structure", "markets.margin_shift": "sizes.margins_cash",
+  "sizes.names": "sizes.headcount", "sizes.large": "sizes.headcount",
+  "sizes.margin_quartiles": "sizes.margins_cash", "sizes.cash_months_quartiles": "sizes.margins_cash",
+  "population.margin_bounds": "sizes.margins_cash", "population.cash_months_max": "sizes.margins_cash",
+  "population.margin_cash_correlation": "sizes.margins_cash",
+};
+
+const nf = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const sign = (v) => (v > 0 ? "+" : v < 0 ? "−" : "±");
+const fmt = {
+  int: (v) => nf.format(Math.round(v)),
+  signedInt: (v) => sign(Math.round(v)) + nf.format(Math.abs(Math.round(v))),
+  pct: (v) => (100 * v).toFixed(2) + " %",
+  index: (v) => v.toFixed(4),
+  meur: (v) => v.toFixed(2) + " M€",
+};
+
+const CHARTS = [
+  { id: "employment", title: "Employment", sub: "persons in the sample", metric: "employment", format: fmt.int },
+  { id: "gap", title: "Employment gap", sub: "reform − reference, persons", gap: "employment", format: fmt.signedInt, zero: true },
+  { id: "unemployment", title: "Unemployment rate", sub: "share of the active population of both pools", metric: "unemployment_rate", format: fmt.pct },
+  { id: "prices", title: "Price index", sub: "sales at current prices over the same sales at initial prices", metric: "price_index", format: fmt.index },
+  { id: "machines", title: "Machines ordered since the reform", sub: "firms; the reference may invest too", metric: "machines_ordered", format: fmt.int, zero: true },
+  { id: "balance", title: "Partial public balance", sub: "M€ per quarter: employer contributions net of the RGDU, minus the ARE proxy", metric: "balance", format: fmt.meur },
+];
+
+let fileParams = null, registry = {}, run = null, source = null, sessionId = null, paused = false;
+const hover = {};
+
+// ---------- parameter form ----------
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const isNumList = (v) => Array.isArray(v) && v.every((x) => typeof x === "number");
+const simple = (v) => ["number", "boolean", "string"].includes(typeof v) || isNumList(v);
+function getPath(obj, path) { return path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj); }
+function setPath(obj, path, value) {
+  const keys = path.split("."); let o = obj;
+  for (const k of keys.slice(0, -1)) o = o[k];
+  o[keys[keys.length - 1]] = value;
+}
+function statusOf(path) {
+  if (FAMILY[path]) return registry[FAMILY[path]];
+  const parts = path.split(".");
+  for (let n = parts.length; n > 0; n--) {
+    const entry = registry[parts.slice(0, n).join(".")];
+    if (entry) return entry;
+  }
+  return null;
+}
+function kindOf(value) {
+  if (typeof value === "boolean") return "bool";
+  if (typeof value === "number") return "num";
+  if (typeof value === "string") return "str";
+  if (isNumList(value)) return "list";
+  return "json";
+}
+function fieldFor(path, value) {
+  const row = document.createElement("label");
+  row.className = "field"; row.dataset.search = path.toLowerCase();
+  const name = document.createElement("span"); name.textContent = path.split(".").slice(1).join(".");
+  row.append(name);
+  const kind = kindOf(value);
+  let input;
+  if (ENUMS[path]) {
+    input = document.createElement("select");
+    for (const option of ENUMS[path]) { const o = document.createElement("option"); o.value = o.textContent = option; input.append(o); }
+    input.value = value;
+  } else if (kind === "bool") {
+    input = document.createElement("input"); input.type = "checkbox"; input.checked = value;
+  } else if (kind === "num") {
+    input = document.createElement("input"); input.type = "number"; input.step = "any"; input.value = value;
+  } else if (kind === "str") {
+    input = document.createElement("input"); input.type = "text"; input.value = value;
+  } else if (kind === "list") {
+    input = document.createElement("input"); input.type = "text"; input.value = value.join(", ");
+  } else {
+    input = document.createElement("textarea"); input.value = JSON.stringify(value); row.classList.add("wide");
+  }
+  input.dataset.path = path; input.dataset.kind = ENUMS[path] ? "str" : kind;
+  input.addEventListener("input", markChanges); input.addEventListener("change", markChanges);
+  row.append(input);
+  return row;
+}
+function addFields(container, path, value) {
+  if (LOCKED.has(path)) return;
+  if (isObj(value) && Object.values(value).every(simple)) {
+    for (const [k, v] of Object.entries(value)) addFields(container, `${path}.${k}`, v);
+  } else {
+    container.append(fieldFor(path, value));
+  }
+}
+function buildForm(params) {
+  const root = $("sections"); root.replaceChildren();
+  for (const [section, value] of Object.entries(params)) {
+    if (section === "meta" || section === "registry") continue;
+    const box = document.createElement("div"); box.className = "section"; box.dataset.section = section;
+    const head = document.createElement("h3"); head.textContent = section;
+    const entry = registry[section];
+    if (entry) { const b = document.createElement("span"); b.className = "badge"; b.textContent = entry.status; b.title = `${entry.source}. ${entry.note}`; head.append(b); }
+    box.append(head);
+    if (isObj(value)) for (const [k, v] of Object.entries(value)) addFields(box, `${section}.${k}`, v);
+    else box.append(fieldFor(section, value));
+    for (const field of box.querySelectorAll(".field")) {
+      const entry = statusOf(field.querySelector("[data-path]").dataset.path);
+      if (entry && entry !== registry[section]) {
+        const b = document.createElement("span"); b.className = "badge"; b.textContent = entry.status; b.title = `${entry.source}. ${entry.note}`;
+        field.querySelector("span").append(" ", b);
+      }
+    }
+    root.append(box);
+  }
+  $("quarters").value = getPath(params, "simulation.quarters");
+  $("burn_in").value = getPath(params, "simulation.burn_in");
+  markChanges();
+}
+function readInput(input) {
+  const kind = input.dataset.kind, raw = input.type === "checkbox" ? input.checked : input.value;
+  if (kind === "bool") return raw;
+  if (kind === "int") { const v = Number(raw); if (!Number.isInteger(v)) throw new Error("a whole number"); return v; }
+  if (kind === "num") { if (raw.trim() === "") throw new Error("a number"); const v = Number(raw); if (!Number.isFinite(v)) throw new Error("a number"); return v; }
+  if (kind === "str") return raw;
+  if (kind === "list") {
+    const v = raw.split(",").map((x) => x.trim()).filter((x) => x !== "").map(Number);
+    if (v.some((x) => !Number.isFinite(x))) throw new Error("numbers separated by commas"); return v;
+  }
+  return JSON.parse(raw);
+}
+function collectParams() {
+  const out = structuredClone(fileParams); let ok = true;
+  for (const input of document.querySelectorAll("[data-path]")) {
+    const field = input.closest(".field");
+    try { setPath(out, input.dataset.path, readInput(input)); field && field.classList.remove("invalid"); }
+    catch (err) { ok = false; field && field.classList.add("invalid"); showError(`${input.dataset.path}: expected ${err.message}`); }
+  }
+  return ok ? out : null;
+}
+function markChanges() {
+  let n = 0;
+  for (const input of document.querySelectorAll("[data-path]")) {
+    let changed = false;
+    try { changed = JSON.stringify(readInput(input)) !== JSON.stringify(getPath(fileParams, input.dataset.path)); } catch { changed = true; }
+    const field = input.closest(".field"); if (field) field.classList.toggle("changed", changed);
+    if (changed) n++;
+  }
+  $("changed-count").textContent = n ? `· ${n} changed from the file` : "· as in the file";
+}
+$("filter").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  for (const box of document.querySelectorAll(".section")) {
+    let any = false;
+    for (const field of box.querySelectorAll(".field")) {
+      const show = !q || field.dataset.search.includes(q); field.hidden = !show; any = any || show;
+    }
+    box.hidden = !any;
+  }
+});
+$("reset").addEventListener("click", () => buildForm(fileParams));
+for (const id of ["quarters", "burn_in"]) $(id).addEventListener("input", () => { markChanges(); if (!run) drawAll(); });
+$("save").addEventListener("click", async () => {
+  const params = collectParams(); if (!params) return;
+  const res = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ params, name: $("save-name").value }) });
+  const out = await res.json();
+  $("save-message").textContent = res.ok ? `Saved to ${out.path}. Reuse it with: ${out.command}` : out.error;
+});
+
+// ---------- run control ----------
+function showError(text) { const el = $("run-error"); el.textContent = text; el.hidden = !text; }
+async function control(action, extra = {}) {
+  if (!sessionId) return;
+  await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: sessionId, action, ...extra }) });
+}
+function setRunning(on) {
+  $("pause").disabled = $("step").disabled = $("stop").disabled = !on;
+  $("pause").textContent = paused ? "Resume" : "Pause";
+}
+$("run").addEventListener("click", async () => {
+  showError("");
+  const params = collectParams(); if (!params) return;
+  if (source) { source.close(); await control("stop"); }
+  paused = false;
+  run = { meta: null, rows: [] };
+  $("log").replaceChildren();
+  $("progress").textContent = "starting…";
+  const body = { params, alpha: Number($("alpha").value), technology: $("technology").checked, feedback: $("feedback").checked,
+                 seed: Number($("seed").value), delay: Number($("pace").value) / 1000 };
+  const res = await fetch("/api/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const out = await res.json();
+  if (!res.ok) { showError(out.error || "could not start"); return; }
+  sessionId = out.id;
+  setRunning(true);
+  source = new EventSource(`/api/stream?id=${sessionId}`);
+  source.onmessage = (e) => handle(JSON.parse(e.data));
+  source.onerror = () => { if (run && run.done) { source.close(); } };
+  drawAll();
+});
+$("pause").addEventListener("click", async () => { paused = !paused; await control(paused ? "pause" : "resume"); setRunning(true); });
+$("step").addEventListener("click", async () => { paused = true; await control("step"); setRunning(true); });
+$("stop").addEventListener("click", async () => {
+  await control("stop"); if (source) source.close();
+  setRunning(false); $("progress").textContent += " · stopped";
+});
+$("pace").addEventListener("input", (e) => { $("pace-label").textContent = `${e.target.value} ms`; });
+$("pace").addEventListener("change", (e) => control("pace", { delay: Number(e.target.value) / 1000 }));
+
+function handle(ev) {
+  if (ev.type === "start") {
+    run.meta = ev;
+    $("status").textContent = `${ev.status} · seed ${ev.seed} · ${ev.firms} firms · α = ${ev.alpha} · technology ${ev.technology ? "possible" : "impossible"}${ev.feedback ? " · budgets follow income" : ""}`;
+  } else if (ev.type === "quarter") {
+    run.rows.push(ev);
+    const total = run.meta.burn_in + run.meta.quarters, done = run.rows.length;
+    $("progress").textContent = `${ev.phase === "burn-in" ? "burn-in quarter" : "quarter"} ${ev.t} · ${done} of ${total} computed`;
+    for (const item of ev.events) log(ev, item);
+    drawAll();
+  } else if (ev.type === "done") {
+    run.done = true; source.close(); setRunning(false);
+    $("progress").textContent += " · done";
+  } else if (ev.type === "error") {
+    run.done = true; source.close(); setRunning(false);
+    showError(`The model refused these parameters: ${ev.message}`);
+    $("progress").textContent = "stopped on an error";
+  }
+}
+function log(ev, item) {
+  const li = document.createElement("li");
+  const q = document.createElement("span"); q.className = "q"; q.textContent = ev.phase === "burn-in" ? `burn-in ${ev.t}` : `quarter ${ev.t}`;
+  const b = document.createElement("span"); b.className = "b"; b.textContent = item.branch;
+  li.append(q, b, document.createTextNode(item.text));
+  $("log").prepend(li);
+  while ($("log").children.length > 300) $("log").lastChild.remove();
+}
+
+// ---------- charts ----------
+function el(tag, attrs, parent) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (parent) parent.append(node);
+  return node;
+}
+function niceTicks(lo, hi, count = 4) {
+  if (lo === hi) { const d = Math.abs(lo) * 0.05 || 1; lo -= d; hi += d; }
+  const raw = (hi - lo) / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => raw <= s);
+  const start = Math.floor(lo / step) * step, ticks = [];
+  for (let v = start; v <= hi + step * 0.5; v += step) ticks.push(Number(v.toPrecision(12)));
+  return ticks;
+}
+function seriesOf(chart) {
+  const rows = run ? run.rows : [];
+  const xs = rows.map((r) => r.t);
+  if (chart.gap) return { xs, series: [{ cls: "pol", name: "reform − reference", values: rows.map((r) => r.reform[chart.gap] - r.reference[chart.gap]) }] };
+  const alpha = run && run.meta ? run.meta.alpha : Number($("alpha").value);
+  return { xs, series: [
+    { cls: "ref", name: "reference, α = 1", values: rows.map((r) => r.reference[chart.metric]) },
+    { cls: "pol", name: `reform, α = ${alpha}`, values: rows.map((r) => r.reform[chart.metric]) },
+  ] };
+}
+function buildCards() {
+  const root = $("charts");
+  for (const chart of CHARTS) {
+    const card = document.createElement("figure"); card.className = "card"; card.id = chart.id;
+    const cap = document.createElement("figcaption");
+    const h = document.createElement("h3"); h.textContent = chart.title;
+    const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = chart.sub;
+    cap.append(h, sub);
+    const legend = document.createElement("div"); legend.className = "legend";
+    const plot = document.createElement("div"); plot.className = "plot"; plot.tabIndex = 0;
+    plot.setAttribute("aria-label", `${chart.title}: use the arrow keys to read quarter by quarter`);
+    const svg = el("svg", { height: 200, role: "img" }); const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true;
+    plot.append(svg, tip);
+    card.append(cap, legend, plot);
+    root.append(card);
+    plot.addEventListener("pointermove", (e) => { hover[chart.id] = { x: e.clientX - plot.getBoundingClientRect().left }; drawChart(chart); });
+    plot.addEventListener("pointerleave", () => { delete hover[chart.id]; drawChart(chart); });
+    plot.addEventListener("focus", () => { hover[chart.id] = { index: Infinity }; drawChart(chart); });
+    plot.addEventListener("blur", () => { delete hover[chart.id]; drawChart(chart); });
+    plot.addEventListener("keydown", (e) => {
+      const n = run ? run.rows.length : 0; if (!n) return;
+      const h = hover[chart.id] || { index: n - 1 };
+      let i = Math.min(h.index ?? n - 1, n - 1);
+      if (e.key === "ArrowLeft") i = Math.max(0, i - 1); else if (e.key === "ArrowRight") i = Math.min(n - 1, i + 1); else return;
+      e.preventDefault(); hover[chart.id] = { index: i }; drawChart(chart);
+    });
+  }
+}
+function drawChart(chart) {
+  const card = $(chart.id), plot = card.querySelector(".plot"), svg = card.querySelector("svg"), tip = card.querySelector(".tip");
+  const legend = card.querySelector(".legend");
+  const W = Math.max(280, plot.clientWidth), H = 200, m = { l: 58, r: 14, t: 12, b: 24 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.replaceChildren();
+  const { xs, series } = seriesOf(chart);
+  legend.replaceChildren();
+  if (series.length > 1) for (const s of series) {
+    const item = document.createElement("span"); const key = document.createElement("i"); key.className = `key ${s.cls}`;
+    item.append(key, document.createTextNode(s.name)); legend.append(item);
+  }
+  const meta = run && run.meta;
+  const x0 = meta ? 1 - meta.burn_in : 1, x1 = meta ? meta.quarters : Number($("quarters").value || 8);
+  const span = Math.max(1, x1 - x0);
+  const sx = (x) => m.l + ((x - x0) / span) * (W - m.l - m.r);
+  const values = series.flatMap((s) => s.values).filter(Number.isFinite);
+  if (chart.zero) values.push(0);
+  let lo = values.length ? Math.min(...values) : 0, hi = values.length ? Math.max(...values) : 1;
+  const ticks = niceTicks(lo, hi); lo = ticks[0]; hi = ticks[ticks.length - 1];
+  const sy = (y) => H - m.b - ((y - lo) / (hi - lo || 1)) * (H - m.t - m.b);
+  for (const t of ticks) {
+    el("line", { x1: m.l, x2: W - m.r, y1: sy(t), y2: sy(t), class: t === 0 && chart.zero ? "baseline" : "gridline" }, svg);
+    el("text", { x: m.l - 6, y: sy(t) + 4, "text-anchor": "end", class: "tick" }, svg).textContent = chart.format(t);
+  }
+  const every = span > 16 ? 4 : span > 8 ? 2 : 1;
+  for (let x = Math.ceil(x0); x <= x1; x++) {
+    if ((x - x0) % every !== 0 && x !== x1) continue;
+    el("text", { x: sx(x), y: H - 6, "text-anchor": "middle", class: "tick" }, svg).textContent = x;
+  }
+  el("line", { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: "baseline" }, svg);
+  if (meta && meta.burn_in > 0) {
+    const xr = sx(0.5);
+    el("line", { x1: xr, x2: xr, y1: m.t, y2: H - m.b, class: "marker-line" }, svg);
+    el("text", { x: xr + 4, y: m.t + 8, class: "marker-text" }, svg).textContent = "reform";
+  }
+  if (!xs.length) {
+    el("text", { x: (m.l + W - m.r) / 2, y: H / 2, "text-anchor": "middle", class: "empty" }, svg).textContent = "Press Run to watch the quarters come in";
+    tip.hidden = true; return;
+  }
+  for (const s of series) {
+    const d = xs.map((x, i) => `${i ? "L" : "M"}${sx(x).toFixed(1)},${sy(s.values[i]).toFixed(1)}`).join("");
+    el("path", { d, class: `line ${s.cls}` }, svg);
+    el("circle", { cx: sx(xs[xs.length - 1]), cy: sy(s.values[s.values.length - 1]), r: 4, class: `dot ${s.cls}` }, svg);
+  }
+  const h = hover[chart.id];
+  if (!h) { tip.hidden = true; return; }
+  let i;
+  if (h.index !== undefined) i = Math.min(h.index, xs.length - 1);
+  else { let best = Infinity; xs.forEach((x, k) => { const dist = Math.abs(sx(x) - h.x); if (dist < best) { best = dist; i = k; } }); }
+  const cx = sx(xs[i]);
+  el("line", { x1: cx, x2: cx, y1: m.t, y2: H - m.b, class: "cross" }, svg);
+  for (const s of series) el("circle", { cx, cy: sy(s.values[i]), r: 4, class: `dot ${s.cls}` }, svg);
+  const row = run.rows[i];
+  tip.replaceChildren();
+  const head = document.createElement("div"); head.className = "head";
+  head.textContent = row.phase === "burn-in" ? `burn-in quarter ${row.t}, before the reform` : `quarter ${row.t} after the reform`;
+  tip.append(head);
+  for (const s of series) {
+    const line = document.createElement("div"); line.className = "row";
+    const key = document.createElement("i"); key.className = `key ${s.cls}`;
+    const strong = document.createElement("strong"); strong.textContent = chart.format(s.values[i]);
+    const name = document.createElement("span"); name.className = "name"; name.textContent = s.name;
+    line.append(key, strong, name); tip.append(line);
+  }
+  tip.hidden = false;
+  const left = cx + 12 + tip.offsetWidth > W ? cx - 12 - tip.offsetWidth : cx + 12;
+  tip.style.left = `${Math.max(0, left)}px`; tip.style.top = `${m.t}px`;
+}
+function drawTiles() {
+  const last = run && run.rows[run.rows.length - 1];
+  if (!last) { for (const id of ["tile-gap", "tile-u", "tile-m", "tile-b"]) $(id).textContent = "–"; return; }
+  const r = last.reference, p = last.reform;
+  const gap = p.employment - r.employment;
+  $("tile-gap").textContent = fmt.signedInt(gap);
+  $("tile-gap-sub").textContent = `persons, ${sign(gap)}${Math.abs(100 * gap / r.employment).toFixed(2)} % of ${fmt.int(r.employment)}`;
+  const du = 100 * (p.unemployment_rate - r.unemployment_rate);
+  $("tile-u").textContent = `${sign(Number(du.toFixed(2)))}${Math.abs(du).toFixed(2)}`;
+  $("tile-u-sub").textContent = `percentage points; reference at ${fmt.pct(r.unemployment_rate)}`;
+  $("tile-m").textContent = fmt.signedInt(p.machines_ordered - r.machines_ordered);
+  $("tile-m-sub").textContent = `orders since the reform: ${p.machines_ordered} against ${r.machines_ordered}`;
+  const db = p.balance - r.balance;
+  $("tile-b").textContent = `${sign(Number(db.toFixed(2)))}${Math.abs(db).toFixed(2)}`;
+  $("tile-b-sub").textContent = `M€ per quarter; reference at ${fmt.meur(r.balance)}`;
+}
+function drawCells() {
+  const table = $("cells"); table.replaceChildren();
+  const last = run && run.rows[run.rows.length - 1];
+  const meta = run && run.meta;
+  if (!last || !meta) return;
+  const gaps = last.cells.map((c) => c.reform - c.reference);
+  const limit = Math.max(1, ...gaps.map(Math.abs));
+  const head = table.createTHead().insertRow();
+  for (const label of ["market", ...meta.sizes.map((s) => `${s} posts`), "all sizes"]) { const th = document.createElement("th"); th.textContent = label; head.append(th); }
+  const body = table.createTBody();
+  for (const market of meta.markets) {
+    const tr = body.insertRow(); const name = tr.insertCell(); name.textContent = market.replaceAll("_", " ");
+    let ref = 0, pol = 0;
+    for (const size of meta.sizes) {
+      const c = last.cells.find((x) => x.market === market && x.size === size);
+      ref += c.reference; pol += c.reform;
+      const g = c.reform - c.reference, td = tr.insertCell(), share = Math.round(100 * Math.abs(g) / limit);
+      td.className = "v" + (share > 60 ? " strong" : "");
+      td.style.background = `color-mix(in oklab, var(${g < 0 ? "--neg" : "--pos"}) ${share}%, var(--mid))`;
+      td.textContent = fmt.signedInt(g);
+      td.title = `${market}, ${size}: ${c.reform} posts in the reform, ${c.reference} in the reference`;
+    }
+    const total = tr.insertCell(); total.textContent = fmt.signedInt(pol - ref); total.title = `${pol} against ${ref}`;
+  }
+}
+function drawData() {
+  const table = $("data"); table.replaceChildren();
+  if (!run || !run.rows.length) return;
+  const cols = [["quarter", (r) => (r.phase === "burn-in" ? `${r.t} (burn-in)` : r.t)],
+    ["employment, reference", (r) => fmt.int(r.reference.employment)], ["employment, reform", (r) => fmt.int(r.reform.employment)],
+    ["unemployment, reference", (r) => fmt.pct(r.reference.unemployment_rate)], ["unemployment, reform", (r) => fmt.pct(r.reform.unemployment_rate)],
+    ["price index, reference", (r) => fmt.index(r.reference.price_index)], ["price index, reform", (r) => fmt.index(r.reform.price_index)],
+    ["machines, reference", (r) => r.reference.machines_ordered], ["machines, reform", (r) => r.reform.machines_ordered],
+    ["balance, reference", (r) => fmt.meur(r.reference.balance)], ["balance, reform", (r) => fmt.meur(r.reform.balance)],
+    ["hires / exits, reform", (r) => `${r.reform.hires} / ${r.reform.exits}`], ["unfilled vacancies, reform", (r) => r.reform.unfilled]];
+  const head = table.createTHead().insertRow();
+  for (const [label] of cols) { const th = document.createElement("th"); th.textContent = label; head.append(th); }
+  const body = table.createTBody();
+  for (const r of run.rows) { const tr = body.insertRow(); for (const [, get] of cols) tr.insertCell().textContent = get(r); }
+}
+function drawAll() { for (const chart of CHARTS) drawChart(chart); drawTiles(); drawCells(); drawData(); }
+window.addEventListener("resize", () => drawAll());
+
+// ---------- start ----------
+buildCards();
+fetch("/api/params").then((r) => r.json()).then((out) => {
+  fileParams = out.params; registry = out.params.registry || {};
+  $("status").textContent = `${out.params.meta.status} · parameters from ${out.source}`;
+  buildForm(fileParams);
+  drawAll();
+}).catch((err) => showError(`Could not load the parameters: ${err}`));
+</script>
+</body>
+</html>
