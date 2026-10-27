@@ -84,6 +84,18 @@
       "source": "no source; experiments at 0 / moderate / high",
       "verified": false,
       "note": "eta: price sensitivity of customers; lambda: speed at which prices follow costs; spillover: share of unserved demand offered to rivals (0 in the experimental reference)."
+    },
+    "labor": {
+      "status": "H",
+      "source": "target: S5 for quit and hiring rates, INSEE for unemployment; none checked yet",
+      "verified": false,
+      "note": "Quarterly quit rate, common probability that a vacancy is filled within the quarter, hiring weights by unemployment duration (re-employment), initial unemployment by pool."
+    },
+    "are": {
+      "status": "H",
+      "source": "orders of magnitude; a proxy, not individual rights",
+      "verified": false,
+      "note": "Replacement rate applied to the pool's reference wage, share compensated and amount factor by duration bucket (0–1, 2–4, 5+ quarters)."
     }
   },
   "rgdu": {
@@ -157,5 +169,17 @@
     "lambda": 0.25,
     "spillover": 0.0,
     "history": 2
+  },
+  "labor": {
+    "quit_rate": 0.035,
+    "match_prob": 0.8,
+    "hire_weights": [1.0, 0.7, 0.4],
+    "initial_unemployment": [0.085, 0.065],
+    "initial_duration_shares": [0.4, 0.3, 0.3]
+  },
+  "are": {
+    "replacement_rate": 0.57,
+    "share_compensated": [0.70, 0.60, 0.40],
+    "amount_factor": [1.0, 1.0, 0.85]
   }
 }
