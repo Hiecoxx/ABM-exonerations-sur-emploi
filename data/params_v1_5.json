@@ -78,6 +78,12 @@
       "source": "no source",
       "verified": false,
       "note": "Share of intermediate consumption that does not move with output (rent, overheads)."
+    },
+    "demand": {
+      "status": "H",
+      "source": "no source; experiments at 0 / moderate / high",
+      "verified": false,
+      "note": "eta: price sensitivity of customers; lambda: speed at which prices follow costs; spillover: share of unserved demand offered to rivals (0 in the experimental reference)."
     }
   },
   "rgdu": {
@@ -145,5 +151,11 @@
   },
   "costs": {
     "fixed_share_ci": 0.2
+  },
+  "demand": {
+    "eta": 2.0,
+    "lambda": 0.25,
+    "spillover": 0.0,
+    "history": 2
   }
 }
