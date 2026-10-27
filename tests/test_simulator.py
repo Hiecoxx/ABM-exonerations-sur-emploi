@@ -5,6 +5,7 @@ import pytest
 
 from abm_rgdu import params
 from abm_rgdu import simulator as sim
+from worlds import small_world
 
 P = params.load()
 
@@ -72,20 +73,6 @@ def test_partial_public_balance_is_built_from_its_parts(warmed):
     balance = rec.get("public", "contributions") - rec.get("public", "reduction_applied") - rec.get("public", "are")
     assert rec.get("public", "balance") == pytest.approx(balance)
     assert rec.get("public", "are") == pytest.approx(rec.get("pool", "are").sum(axis=1))
-
-
-def small_world(**changes):
-    """One market, large firms paid mostly in the first band, ample margins and cash."""
-    base = {
-        "markets.names": ["manufacturing"], "markets.va_rate": [0.3], "markets.routine_share": [0.5],
-        "markets.automatable_mean": [0.4], "markets.at_mp_rate": [0.02], "markets.margin_shift": [0.0],
-        "markets.band_mix": {"A": [[0.94, 0.02, 0.02, 0.02]], "B": [[0.94, 0.02, 0.02, 0.02]]},
-        "sizes.names": ["50-250"], "sizes.headcount": [[80, 120]], "sizes.large": [True],
-        "sizes.margin_quartiles": [[0.3, 0.3, 0.3]], "sizes.cash_months_quartiles": [[6.0, 6.0, 6.0]],
-        "population.replications": 6, "finance.credit_months": [3.0], "demand.lambda": 0.5,
-    }
-    base.update(changes)
-    return params.override(P, base)
 
 
 def test_reform_without_technology_constructed_case():

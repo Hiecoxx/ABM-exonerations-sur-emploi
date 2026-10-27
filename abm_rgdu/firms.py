@@ -5,12 +5,13 @@ automatable; task B is not. A machine adds A capacity, but never more than the
 automatable share θ of A work: the remaining (1 − θ) has to be done by people.
 """
 
+import copy
 import math
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import payroll
+from . import markets, payroll
 
 A, B = 0, 1
 TOL = 1e-9
@@ -111,6 +112,26 @@ def accounts(price, output, unit_ci, fixed_cost, maintenance, labor_cost):
 
 
 @dataclass
+class Machine:
+    """The firm's single technology option, once bought.
+
+    Ordered at the end of quarter `ordered_at`, installing until `active_from`.
+    Capacity, maintenance and the transition cost all start in `active_from`.
+    """
+
+    capacity: float     # A work it can do, in posts
+    cost: float         # K, paid once, at the order date
+    maintenance: float  # per quarter, from activation
+    transition: float   # once, in the first active quarter
+    ordered_at: int
+    active_from: int
+    origin: str = "new"  # or "pre-existing"
+
+    def active(self, t):
+        return t >= self.active_from
+
+
+@dataclass
 class Firm:
     id: int
     market: int
@@ -137,6 +158,9 @@ class Firm:
     due: np.ndarray = field(default_factory=lambda: np.zeros(2, dtype=int))  # notices leaving at end of quarter
     planned_output: float = 0.0
     distress: int = 0            # consecutive quarters beyond the credit ceiling
+    machine: Machine | None = None
+    loan: float = 0.0            # investment loan outstanding
+    loan_payment: float = 0.0    # principal due each quarter
     band_costs: payroll.BandCosts | None = None
     tables: CostTables | None = None
 
@@ -171,11 +195,18 @@ class Firm:
 
         Negative cash is already a draw on the line, so it is not counted twice.
         """
-        return self.cash - self.cash_buffer + self.credit_ceiling
+        return self.cash - self.cash_buffer + self.credit_ceiling - self.loan
 
     def debt(self):
-        """Overdraft."""
-        return max(0.0, -self.cash)
+        """Investment loan plus overdraft: what the credit ceiling bounds."""
+        return self.loan + max(0.0, -self.cash)
+
+    def machine_at(self, t):
+        """Machine capacity usable in quarter t: zero while it is not installed."""
+        return self.machine.capacity if self.machine is not None and self.machine.active(t) else 0.0
+
+    def maintenance_at(self, t):
+        return self.machine.maintenance if self.machine is not None and self.machine.active(t) else 0.0
 
 
 @dataclass(frozen=True)
@@ -192,13 +223,30 @@ class Plan:
     value: float
 
 
-def candidate_outputs(demand, machines, a, b, theta):
-    """Output levels worth comparing: each point where one more A or B post is needed, and demand."""
-    levels = [np.arange(int(ceil_tol(b * demand)) + 1) / b, [demand]]
+def candidate_outputs(demand, soon, later, a, b, theta):
+    """Output levels worth comparing: each point where one more A or B post is needed, and demand.
+
+    Duplicates do no harm and are left in; levels above demand are cut back to it.
+    """
     staff_a = np.arange(int(ceil_tol(a * demand)) + 1, dtype=float)
-    for m in {machines[0], machines[min(1, len(machines) - 1)]}:
-        levels.append((staff_a + effective_machine(m, staff_a, theta)) / a)
-    return np.unique(np.clip(np.concatenate(levels), 0.0, demand))
+    levels = [np.arange(int(ceil_tol(b * demand)) + 1) / b, [demand], staff_a / a if soon == 0 else
+              (staff_a + effective_machine(soon, staff_a, theta)) / a]
+    if later != soon:
+        levels.append((staff_a + effective_machine(later, staff_a, theta)) / a)
+    return np.minimum(np.concatenate(levels), demand)
+
+
+def _need_a(q, machine, a, theta):
+    x = np.maximum(a * q - machine, (1 - theta) * a * q) if machine > 0 else a * q
+    return np.maximum(np.ceil(x - TOL), 0).astype(np.int64)
+
+
+def _capacity(staff_a, staff_b, machine, a, b, theta):
+    """`capacity` for arrays of whole staff, without the conversions."""
+    if machine > 0:
+        staff_m = staff_a + (np.minimum(machine, theta / (1 - theta) * staff_a) if theta < 1 else machine)
+        return np.minimum(staff_m / a, staff_b / b)
+    return np.minimum(staff_a / a, staff_b / b)
 
 
 def plan_staff(firm, demand, margin, machines, adjustment, allow_hiring=True):
@@ -209,47 +257,56 @@ def plan_staff(firm, demand, margin, machines, adjustment, allow_hiring=True):
     Each candidate is valued with the real dates: hires work from t+1; notified
     posts are still paid, and still produce, in t+1 and are gone from t+2; each
     quarter counts only the machine capacity active in it (`machines[k]` for
-    t+1+k), and staff from t+2 is sized on the capacity active in t+2. Value = Σ [(p − c_v) × min(demand, capacity) − labor cost], minus a
-    hiring cost per hire and severance per layoff. Quits left unreplaced cost
-    nothing, so a shrinking firm tends to shrink by attrition first. A level
-    below demand is allowed: nothing forces a firm to keep losing money.
+    t+1+k), and staff from t+2 is sized on the capacity active in t+2.
+    Value = Σ [(p − c_v) × min(demand, capacity) − labor cost], minus a hiring
+    cost per hire and severance per layoff. Quits left unreplaced cost nothing,
+    so a shrinking firm tends to shrink by attrition first. A level below
+    demand is allowed: nothing forces a firm to keep losing money. Among equal
+    values the larger output wins.
     """
     a, b, theta = firm.a, firm.b, firm.theta
     hiring_months, severance_months = adjustment
-    q = candidate_outputs(demand, machines, a, b, theta)
-    soon = np.stack(requirements(q, machines[0], a, b, theta))   # staff needed in t+1
-    m_later = machines[min(1, len(machines) - 1)]
-    later = np.stack(requirements(q, m_later, a, b, theta))       # staff needed from t+2
-    staff = firm.staff[:, None]
-    due = firm.due[:, None]
-    next_staff = np.maximum(soon, staff - due)
-    hires = np.maximum(0, soon - staff)
-    cancel = np.minimum(due, np.maximum(0, soon - (staff - due)))
-    execute = due - cancel
-    target = np.minimum(next_staff, later)
-    notify = next_staff - target
+    m_soon = machines[0]
+    m_later = machines[1] if len(machines) > 1 else m_soon
+    q = candidate_outputs(demand, m_soon, m_later, a, b, theta)
+    need_b = np.maximum(np.ceil(b * q - TOL), 0).astype(np.int64)
+    need_a = _need_a(q, m_soon, a, theta)                                          # in t+1
+    need_a_later = need_a if m_later == m_soon else _need_a(q, m_later, a, theta)  # from t+2
 
-    top = int(max(next_staff.max(), staff.max())) + 1
-    cost = [firm.table("cost", t, top) for t in (A, B)]
-    gross = [firm.table("gross", t, top) for t in (A, B)]
-    value = np.zeros(len(q))
-    for k, m in enumerate(machines):
-        s = next_staff if k == 0 else target
-        out = np.minimum(demand, capacity(s[A], s[B], m, a, b, theta))
-        value += margin * out - cost[A][s[A]] - cost[B][s[B]]
-    for t in (A, B):
-        s0 = int(firm.staff[t])
-        value -= hiring_months / 3 * (gross[t][s0 + hires[t]] - gross[t][s0])
-        value -= severance_months / 3 * (gross[t][s0] - gross[t][s0 - execute[t]] + gross[t][next_staff[t]] - gross[t][target[t]])
+    sa, sb = int(firm.staff[A]), int(firm.staff[B])
+    da, db = int(firm.due[A]), int(firm.due[B])
+    next_a, next_b = np.maximum(need_a, sa - da), np.maximum(need_b, sb - db)
+    hires_a, hires_b = np.maximum(need_a - sa, 0), np.maximum(need_b - sb, 0)
+    cancel_a = np.minimum(np.maximum(need_a - (sa - da), 0), da)
+    cancel_b = np.minimum(np.maximum(need_b - (sb - db), 0), db)
+    exec_a, exec_b = da - cancel_a, db - cancel_b
+    target_a, target_b = np.minimum(next_a, need_a_later), need_b
+
+    top = max(int(next_a.max()), int(next_b.max()), sa, sb) + 1
+    cost_a, cost_b = firm.table("cost", A, top), firm.table("cost", B, top)
+    gross_a, gross_b = firm.table("gross", A, top), firm.table("gross", B, top)
+    value = margin * np.minimum(_capacity(next_a, next_b, m_soon, a, b, theta), demand) - cost_a[next_a] - cost_b[next_b]
+    later_cost = cost_a[target_a] + cost_b[target_b]
+    counts = {}
+    for m in machines[1:]:
+        counts[m] = counts.get(m, 0) + 1
+    for m, k in counts.items():
+        value += k * (margin * np.minimum(_capacity(target_a, target_b, m, a, b, theta), demand) - later_cost)
+    value -= hiring_months / 3 * (gross_a[sa + hires_a] + gross_b[sb + hires_b] - gross_a[sa] - gross_b[sb])
+    value -= severance_months / 3 * (
+        gross_a[sa] - gross_a[sa - exec_a] + gross_a[next_a] - gross_a[target_a]
+        + gross_b[sb] - gross_b[sb - exec_b] + gross_b[next_b] - gross_b[target_b]
+    )
     if not allow_hiring:
-        value = np.where(hires.sum(axis=0) > 0, -np.inf, value)
+        value = np.where(hires_a + hires_b > 0, -np.inf, value)
 
     best = value.max()
-    i = int(np.flatnonzero(value >= best - 1e-9 * max(1.0, abs(best)))[-1])
-    plan = Plan(float(q[i]), target[:, i], next_staff[:, i], hires[:, i], cancel[:, i], execute[:, i],
-                notify[:, i], float(value[i]))
-    if (capacity(*plan.next_staff, machines[0], a, b, theta) < plan.output - 1e-6
-            or capacity(*plan.target, m_later, a, b, theta) < plan.output - 1e-6):
+    i = int(np.argmax(np.where(value >= best - 1e-9 * max(1.0, abs(best)), q, -1.0)))
+    plan = Plan(float(q[i]), np.array([target_a[i], target_b[i]]), np.array([next_a[i], next_b[i]]),
+                np.array([hires_a[i], hires_b[i]]), np.array([cancel_a[i], cancel_b[i]]),
+                np.array([exec_a[i], exec_b[i]]), np.array([next_a[i] - target_a[i], next_b[i] - target_b[i]]), float(value[i]))
+    if (_capacity(plan.next_staff[A], plan.next_staff[B], m_soon, a, b, theta) < plan.output - 1e-6
+            or _capacity(plan.target[A], plan.target[B], m_later, a, b, theta) < plan.output - 1e-6):
         raise RuntimeError(f"firm {firm.id}: planned staff cannot produce the planned output")
     return plan
 
@@ -260,3 +317,139 @@ def price_target(firm, plan, maintenance):
         return firm.price
     labor = firm.amount("cost", plan.target)
     return (1 + firm.markup) * (firm.unit_ci + (labor + firm.fixed_cost + maintenance) / plan.output)
+
+
+def new_machine(firm, t, unit_cost, p):
+    tech = p["technology"]
+    cost = unit_cost * firm.machine_capacity
+    return Machine(firm.machine_capacity, cost, tech["maintenance_rate"] * cost, tech["transition_rate"] * cost,
+                   ordered_at=t, active_from=t + tech["delay"])
+
+
+@dataclass(frozen=True)
+class MarketView:
+    """What a firm takes as given about its market when it looks ahead."""
+
+    budget: float
+    base_share: float
+    rest_weight: float  # weight of its rivals at their current prices
+    eta: float
+
+
+@dataclass(frozen=True)
+class Evaluation:
+    npv_with: float
+    npv_without: float
+    feasible: bool
+    cost: float
+
+    @property
+    def gain(self):
+        return self.npv_with - self.npv_without
+
+
+def project(firm, t, machine, view, p):
+    """Cash flows of the decision quarter t and of quarters t+1 … t+H, with or without a machine.
+
+    The projection runs the same planner as the simulation, with the same dates,
+    the same `requirements` and the same adjustment costs; vacancies are assumed
+    filled and quits are their expected value. The firm's own price follows its
+    target at speed λ and its own demand answers through the market-share formula,
+    rivals' prices held fixed. Capex is in the flow of quarter t, once. The machine
+    keeps a linear residual value at the horizon, returned separately because it
+    is not cash. No interest and no loan flow enter here: they are financing.
+    """
+    tech, planning, dem, lab = p["technology"], p["planning"], p["demand"], p["labor"]
+    horizon, h = tech["npv_horizon"], planning["horizon"]
+    adjustment = (planning["hiring_cost_months"], planning["severance_months"])
+    shadow = copy.copy(firm)
+    shadow.staff, shadow.due = firm.staff.copy(), firm.due.copy()
+    shadow.machine = machine if machine is not None else firm.machine
+    history = list(firm.demand_history[-dem["history"]:])
+    price = firm.price
+    flows = np.zeros(horizon + 1)
+
+    def decide(tq):
+        """End-of-quarter decisions in the projection; returns their cost."""
+        nonlocal price
+        expected = float(np.mean(history[-dem["history"]:]))
+        machines = [shadow.machine_at(tq + 1 + k) for k in range(h)]
+        plan = plan_staff(shadow, expected, price - shadow.unit_ci, machines, adjustment)
+        cost = 0.0
+        for task in (A, B):
+            s = int(shadow.staff[task])
+            gross = shadow.table("gross", task, s + int(plan.hires[task]))
+            cost += adjustment[1] / 3 * (gross[s] - gross[s - int(plan.execute[task])])
+            cost += adjustment[0] / 3 * (gross[s + int(plan.hires[task])] - gross[s])
+        shadow.staff = shadow.staff - plan.execute + plan.hires
+        shadow.due = plan.notify.copy()
+        target = price_target(shadow, plan, shadow.maintenance_at(tq + 2))
+        price = markets.adjust_price(price, target, dem["lambda"])
+        return cost
+
+    flows[0] = -(machine.cost if machine is not None else 0.0) - decide(t)
+    for k in range(1, horizon + 1):
+        tq = t + k
+        demand = markets.own_demand(price, firm.ref_price, view.base_share, view.rest_weight, view.budget, view.eta)
+        out = min(demand, float(capacity(shadow.staff[A], shadow.staff[B], shadow.machine_at(tq),
+                                         firm.a, firm.b, firm.theta)))
+        surplus = (price - firm.unit_ci) * out - firm.fixed_cost - shadow.maintenance_at(tq) - shadow.amount("cost")
+        if machine is not None and tq == machine.active_from:
+            surplus -= machine.transition
+        staying = shadow.staff - shadow.due
+        shadow.staff = shadow.staff - np.floor(lab["quit_rate"] * staying + 0.5).astype(int)
+        history.append(demand)
+        flows[k] = surplus - decide(tq)
+    residual = 0.0
+    if machine is not None:
+        used = t + horizon - machine.active_from + 1
+        residual = machine.cost * max(0.0, 1 - used / tech["lifetime"])
+    return flows, residual
+
+
+def financing_path_ok(firm, machine, flows, p):
+    """Can the firm pay K now and service the loan along the projected path?
+
+    Cash above the buffer pays first; the loan covers the rest, from the order
+    date. From the next quarter, interest on loan and overdraft, and equal
+    principal installments, leave cash. Loan + overdraft must stay within the
+    ceiling throughout.
+    """
+    fin = p["finance"]
+    if firm.financing_available() < machine.cost - 1e-6:
+        return False
+    used = max(0.0, min(machine.cost, firm.cash - firm.cash_buffer))
+    loan = firm.loan + machine.cost - used
+    payment = firm.loan_payment + (machine.cost - used) / fin["loan_quarters"]
+    cash = firm.cash + flows[0] + (machine.cost - used)
+    for k in range(1, len(flows)):
+        interest = fin["loan_rate"] * (loan + max(0.0, -cash))
+        principal = min(loan, payment)
+        cash += flows[k] - interest - principal
+        loan -= principal
+        if loan + max(0.0, -cash) > firm.credit_ceiling + 1e-6:
+            return False
+    return True
+
+
+def evaluate_machine(firm, t, unit_cost, view, p):
+    """Economic profitability and financial feasibility, kept apart."""
+    machine = new_machine(firm, t, unit_cost, p)
+    r = p["finance"]["discount_rate"]
+    discount = (1 + r) ** -np.arange(p["technology"]["npv_horizon"] + 1)
+    with_flows, residual = project(firm, t, machine, view, p)
+    without_flows, _ = project(firm, t, None, view, p)
+    npv_with = float(with_flows @ discount + residual * discount[-1])
+    npv_without = float(without_flows @ discount)
+    return Evaluation(npv_with, npv_without, financing_path_ok(firm, machine, with_flows, p), machine.cost), machine
+
+
+def order_machine(firm, machine, p):
+    """Buy at the order date: cash above the buffer first, the loan for the rest."""
+    used = max(0.0, min(machine.cost, firm.cash - firm.cash_buffer))
+    borrowed = machine.cost - used
+    firm.cash += borrowed - machine.cost
+    firm.loan += borrowed
+    firm.loan_payment += borrowed / p["finance"]["loan_quarters"]
+    firm.machine = machine
+    return borrowed

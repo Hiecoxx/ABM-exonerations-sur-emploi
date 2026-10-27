@@ -157,3 +157,12 @@ def test_financing_available_counts_an_overdraft_once():
     assert f.financing_available() == pytest.approx(850.0)
     f.cash = 300.0
     assert f.financing_available() == pytest.approx(1250.0)
+
+
+def test_excess_staff_in_either_task_is_notified():
+    f = _firm([10, 14])
+    unit_labor = f.amount("cost") / 24.0
+    plan = firms.plan_staff(f, 20.0, 3.0 * unit_labor, [0.0] * 4, ADJ)
+    assert list(plan.notify) == [0, 4]
+    assert list(plan.target) == [10, 10]
+    assert list(plan.next_staff) == [10, 14]

@@ -114,6 +114,12 @@
       "source": "convention of the spec: 8 quarters after the reform",
       "verified": false,
       "note": "A burn-in at α = 1, with no investment, is shared by every branch of a seed."
+    },
+    "technology": {
+      "status": "H",
+      "source": "no observed price: a grid of costs per A post of capacity, swept",
+      "verified": false,
+      "note": "One option per firm, sized to the automatable share of its initial A work. Cost, delay, maintenance, transition and lifetime are set independently of wages, and are identical in reference and reform."
     }
   },
   "rgdu": {
@@ -203,7 +209,9 @@
   "finance": {
     "credit_months": [1.0, 2.0, 3.0],
     "cash_buffer_months": 0.5,
-    "loan_rate": 0.0125
+    "loan_rate": 0.0125,
+    "loan_quarters": 16,
+    "discount_rate": 0.02
   },
   "planning": {
     "horizon": 4,
@@ -214,5 +222,14 @@
     "quarters": 8,
     "burn_in": 4,
     "check_invariants": true
+  },
+  "technology": {
+    "unit_cost": 80000.0,
+    "delay": 2,
+    "maintenance_rate": 0.025,
+    "transition_rate": 0.10,
+    "lifetime": 20,
+    "npv_horizon": 16,
+    "npv_threshold": 0.0
   }
 }

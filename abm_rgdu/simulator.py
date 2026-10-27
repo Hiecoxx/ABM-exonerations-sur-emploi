@@ -132,12 +132,15 @@ def step(state, branch, records, invest):
 
     staff0 = np.array([f.staff for f in firms])
     cash0 = np.array([f.cash for f in firms])
-    machine_now = np.zeros(n)
-    maintenance = np.zeros(n)
+    loan0 = np.array([f.loan for f in firms])
+    machine_now = np.array([f.machine_at(t) for f in firms])
+    maintenance = np.array([f.maintenance_at(t) for f in firms])
+    transition = np.array([f.machine.transition if f.machine is not None and f.machine.active_from == t else 0.0
+                           for f in firms])
 
     # 2–4. Budgets, demand, production.
     budgets = np.array([m.budget for m in state.markets])
-    demand, output, extra, cap, share = (np.zeros(n) for _ in range(5))
+    demand, output, extra, cap, share, weight = (np.zeros(n) for _ in range(6))
     lost, sales = np.zeros(len(state.markets)), np.zeros(len(state.markets))
     for m, budget in zip(state.markets, budgets):
         idx = m.firms
@@ -146,16 +149,17 @@ def step(state, branch, records, invest):
         cap[idx] = [fm.capacity(firms[i].staff[A], firms[i].staff[B], machine_now[i], firms[i].a, firms[i].b,
                                 firms[i].theta) for i in idx]
         share[idx] = mk.shares(prices, refs, m.base_share, dem["eta"])
+        weight[idx] = mk.weights(prices, refs, m.base_share, dem["eta"])
         demand[idx] = mk.allocate(budget, prices, share[idx])
         output[idx], extra[idx], lost[m.index] = mk.spillover(demand[idx], cap[idx], prices, share[idx],
                                                               dem["spillover"])
         sales[m.index] = float((output[idx] * prices).sum())
     orders = demand + extra
 
-    # 5. Accounts of the quarter, and interest on the overdraft carried into it.
+    # 5. Accounts of the quarter; interest on loan and overdraft carried into it, scheduled principal.
     acc = {k: np.zeros(n) for k in ("price", "revenue", "variable_ci", "fixed_cost", "maintenance", "value_added",
                                     "labor_cost", "surplus", "gross_wages", "contributions", "reduction_full",
-                                    "interest")}
+                                    "interest", "principal", "transition")}
     for i, f in enumerate(firms):
         a = fm.accounts(f.price, output[i], f.unit_ci, f.fixed_cost, maintenance[i], f.amount("cost"))
         acc["price"][i] = f.price
@@ -167,7 +171,10 @@ def step(state, branch, records, invest):
         acc["contributions"][i] = f.amount("contributions")
         acc["reduction_full"][i] = f.amount("reduction")
         acc["interest"][i] = fin["loan_rate"] * f.debt()
-        f.cash += a["surplus"] - acc["interest"][i]
+        acc["principal"][i] = min(f.loan, f.loan_payment)
+        acc["transition"][i] = transition[i]
+        f.cash += a["surplus"] - acc["interest"][i] - acc["principal"][i] - transition[i]
+        f.loan -= acc["principal"][i]
     are = np.array([pool.are(p) for pool in pools])
     unemployed = np.array([pool.unemployed() for pool in pools])  # during t, like employment
     buckets = np.stack([pool.by_bucket() for pool in pools])
@@ -179,6 +186,28 @@ def step(state, branch, records, invest):
         quits[i] = np.minimum(staying, labor_pool.stochastic_round(lab["quit_rate"] * staying, state.shocks.quits[row, i]))
         f.staff = f.staff - quits[i]
 
+    # 7. Machine decision: economic profitability and financial feasibility, tested apart.
+    for i, f in enumerate(firms):
+        f.demand_history.append(float(orders[i]))
+    tech = {k: np.zeros(n) for k in ("capex", "new_loan", "npv_gain")}
+    feasible, ordered = np.zeros(n, dtype=bool), np.zeros(n, dtype=bool)
+    evaluated = np.zeros(n, dtype=bool)
+    if invest:
+        unit_cost = p["technology"]["unit_cost"]
+        for m, budget in zip(state.markets, budgets):
+            for j, i in enumerate(m.firms):
+                f = firms[i]
+                if f.machine is not None or f.machine_capacity <= 0:
+                    continue
+                view = fm.MarketView(budget, m.base_share[j], weight[m.firms].sum() - weight[i], dem["eta"])
+                ev, machine = fm.evaluate_machine(f, t, unit_cost, view, p)
+                evaluated[i], feasible[i], tech["npv_gain"][i] = True, ev.feasible, ev.gain
+                if ev.gain > p["technology"]["npv_threshold"] and ev.feasible:
+                    tech["new_loan"][i] = fm.order_machine(f, machine, p)
+                    tech["capex"][i] = machine.cost
+                    ordered[i] = True
+    blocked = evaluated & (tech["npv_gain"] > p["technology"]["npv_threshold"]) & ~feasible
+
     # 8. Labor plan, executed at once; 9. price for t+1.
     adjustment = (planning["hiring_cost_months"], planning["severance_months"])
     fields = ("vacancies", "layoffs", "notices", "cancelled", "non_replacements")
@@ -186,9 +215,8 @@ def step(state, branch, records, invest):
     severance, planned, expected_demand = np.zeros(n), np.zeros(n), np.zeros(n)
     allowed = np.zeros(n, dtype=bool)
     for i, f in enumerate(firms):
-        f.demand_history.append(float(orders[i]))
         expected = float(np.mean(f.demand_history[-dem["history"]:]))
-        machines = [0.0] * planning["horizon"]
+        machines = [f.machine_at(t + 1 + k) for k in range(planning["horizon"])]
         allowed[i] = f.financing_available() > 0
         plan = fm.plan_staff(f, expected, f.price - f.unit_ci, machines, adjustment, allowed[i])
         for task in (A, B):
@@ -203,7 +231,7 @@ def step(state, branch, records, invest):
         flows["vacancies"][i], flows["layoffs"][i] = plan.hires, plan.execute
         flows["notices"][i], flows["cancelled"][i] = plan.notify, plan.cancel
         flows["non_replacements"][i] = np.maximum(0, quits[i] - plan.hires)
-        f.price = mk.adjust_price(f.price, fm.price_target(f, plan, 0.0), dem["lambda"])
+        f.price = mk.adjust_price(f.price, fm.price_target(f, plan, f.maintenance_at(t + 2)), dem["lambda"])
 
     # 10. Matching: separations join their pool, vacancies are filled from it.
     hires = np.zeros((n, 2), dtype=int)
@@ -239,7 +267,9 @@ def step(state, branch, records, invest):
         "hiring_cost": hiring_cost, "cash": np.array([f.cash for f in firms]), "cash_start": cash0,
         "debt": np.array([f.debt() for f in firms]), "distress": np.array([f.distress for f in firms]),
         "hiring_allowed": allowed, "planned_output": planned, "expected_demand": expected_demand,
-        "machine_capacity": machine_now,
+        "machine_capacity": machine_now, "loan": np.array([f.loan for f in firms]), "loan_start": loan0,
+        **tech, "evaluated": evaluated, "feasible": feasible, "blocked": blocked, "ordered": ordered,
+        "machine_state": np.array([_machine_state(f, t) for f in firms]),
     }
     pool_rec = {"active": [pool.active for pool in pools], "unemployed": unemployed, "buckets": buckets,
                 "are": are, "hires": hires.sum(axis=0), "separations": separations.sum(axis=0)}
@@ -266,11 +296,24 @@ def check(state, rec, pool_rec, market_rec):
     va = rec["revenue"] - rec["variable_ci"] - rec["fixed_cost"] - rec["maintenance"]
     if not np.allclose(va, rec["value_added"], rtol=1e-12, atol=1e-6):
         raise InvariantError("CA − CI − maintenance ≠ VA")
-    flow = rec["surplus"] - rec["interest"] - rec["severance"] - rec["hiring_cost"]
+    flow = (rec["surplus"] - rec["interest"] - rec["principal"] - rec["transition"] - rec["severance"]
+            - rec["hiring_cost"] - rec["capex"] + rec["new_loan"])
     if not np.allclose(rec["cash"] - rec["cash_start"], flow, rtol=1e-9, atol=1e-4):
         raise InvariantError("cash identity broken")
+    if not np.allclose(rec["loan"], rec["loan_start"] - rec["principal"] + rec["new_loan"], atol=1e-6):
+        raise InvariantError("loan identity broken")
+    inactive = rec["machine_state"] < 2
+    if np.any(rec["machine_capacity"][inactive] != 0):
+        raise InvariantError("a machine that is not installed adds capacity")
     if np.any(market_rec["sales"] > market_rec["budget"] * (1 + 1e-9)):
         raise InvariantError("sales above the budget")
     for m in state.markets:
         if not np.isclose(rec["share"][m.firms].sum(), 1.0):
             raise InvariantError("market shares do not sum to one")
+
+
+def _machine_state(firm, t):
+    """0: none; 1: ordered or installing during the next quarter; 2: active in the quarter just run."""
+    if firm.machine is None:
+        return 0
+    return 2 if firm.machine.active(t) else 1
