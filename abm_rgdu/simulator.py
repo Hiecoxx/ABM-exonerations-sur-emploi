@@ -79,6 +79,8 @@ class InvariantError(AssertionError):
 
 def initial_state(p, seed):
     sim = p["simulation"]
+    if sim["quarters"] < 1 or sim["burn_in"] < 0:
+        raise ValueError("simulation.quarters must be at least 1 and simulation.burn_in at least 0")
     pop_seq, shock_seq, stock_seq = np.random.SeedSequence(seed).spawn(3)
     firms = population.build_firms(p, np.random.default_rng(pop_seq), np.random.default_rng(stock_seq))
     rng = np.random.default_rng(shock_seq)

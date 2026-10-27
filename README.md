@@ -62,6 +62,21 @@ If the sign of ΔE turns with a parameter that is not identified, the honest con
 
 A seed takes about a minute of one core, mostly spent on investment projections. Seeds run in parallel (`--workers`). The grid is several times longer.
 
+## Changing parameters and time
+
+Every parameter sits in `data/params_v1_5.json`, under the name you see there. It can be changed in two ways, from the lightest to the most lasting.
+
+- **For one run, on the command line.** Name the parameter by its section and key. Values are read as JSON, so numbers, lists and `true`/`false` work as written:
+
+      .venv/bin/python -m abm_rgdu.experiments --seeds 4 --set demand.eta=5 --set technology.unit_cost=60000
+      .venv/bin/python -m abm_rgdu.experiments --quarters 12 --burn-in 0
+      .venv/bin/python -m abm_rgdu.experiments --set "markets.automatable_mean=[0.6, 0.5, 0.3, 0.5]"
+
+  `--quarters` is the horizon after the reform; `--burn-in` is the number of shared quarters at α = 1 before it. A misspelt name is refused rather than silently ignored.
+- **In a copy of the file**, passed with `--params my_params.json`. This is the right place for a set of hypotheses you mean to keep, with its notes and statuses.
+
+Outputs are reported at 2, 4 and 8 quarters, or at whatever `experiments.report_at` says, within the horizon; the last quarter is always included.
+
 ## What comes out
 
 Every file opens with the status of its parameters.

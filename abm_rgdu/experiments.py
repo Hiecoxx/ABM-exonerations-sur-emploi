@@ -93,6 +93,12 @@ def series(rec, state):
     return out
 
 
+def report_quarters(p):
+    """Quarters reported: those asked for within the horizon, and always the last one."""
+    last = p["simulation"]["quarters"]
+    return sorted({q for q in p["experiments"]["report_at"] if 1 <= q <= last} | {last})
+
+
 def first_order(rec):
     """Quarter at which each firm ordered its machine, or 0."""
     ordered = rec.get("firm", "ordered")
@@ -106,7 +112,7 @@ def run_seed(p, seed, branch_list):
     burn = sim.burn_in(state)
     records = sim.run_branches(state, branch_list)
     ser = {b: series(r, state) for b, r in records.items()}
-    report = p["experiments"]["report_at"]
+    report = report_quarters(p)
     quarters = records[branch_list[0]].quarters
     at = [quarters.index(q) for q in report]
 
@@ -172,7 +178,7 @@ def _drift(seed, burn, ref):
     """The reference is not forced to stand still; this says why it moves."""
     rows = []
     for phase, rec in (("burn-in", burn), ("reference", ref)):
-        if rec is None:
+        if rec is None or not rec.quarters:
             continue
         get = lambda k: rec.get("firm", k).sum(axis=(1, 2))  # noqa: E731
         emp, hires, quits, layoffs, vac, nonrep = (get(k) for k in ("employment", "hires", "quits", "layoffs",
@@ -310,13 +316,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Paired RGDU experiments (EXPERIMENTAL parameters).")
     parser.add_argument("--seeds", type=int, default=None, help="number of seeds (default from the parameter file)")
     parser.add_argument("--out", type=Path, default=Path("results"))
-    parser.add_argument("--params", type=Path, default=prm.DEFAULT_PATH)
+    prm.add_arguments(parser)
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--grid", action="store_true", help="also run the hypothesis grid (slow)")
     parser.add_argument("--figures", action="store_true", help="draw the figures from the outputs")
     args = parser.parse_args(argv)
 
-    p = prm.load(args.params)
+    p = prm.from_arguments(args)
     e = p["experiments"]
     seeds = range(args.seeds if args.seeds is not None else e["seeds"])
     results = run_many(p, seeds, branches(p, feedback=(False, True)), args.workers)
