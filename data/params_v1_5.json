@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "version": "1.5",
+    "status": "EXPERIMENTAL — parameters not identified",
+    "money": "constant 2026 euros",
+    "sources": {
+      "S1": "Ministère de l'Économie, RGDU 2026 — https://www.economie.gouv.fr/entreprises/gerer-ses-ressources-humaines-et-ses-salaries/comment-fonctionne-la-reduction-generale-degressive-unique-rgdu-de-cotisations-patronales",
+      "S2": "INSEE, Panorama de l'appareil productif en 2023 — https://www.insee.fr/fr/statistiques/8679855",
+      "S3": "INSEE, Ratios des secteurs marchands par activité en 2023 (Ésane) — https://www.insee.fr/fr/statistiques/2015421",
+      "S4": "INSEE, Salaires dans le secteur privé, édition 2026 — https://www.insee.fr/fr/statistiques/8733089",
+      "S5": "Dares, Mouvements de main-d'œuvre — https://dares.travail-emploi.gouv.fr/donnees/les-mouvements-de-main-doeuvre",
+      "S6": "Acemoglu, Lelarge & Restrepo (2020), Competing with Robots: Firm-Level Evidence from France — https://www.aeaweb.org/articles?id=10.1257%2Fpandp.20201003"
+    }
+  },
+  "registry": {
+    "rgdu": {
+      "status": "R",
+      "source": "S1; décret 2026-509 of 12 June 2026",
+      "verified": true,
+      "note": "Coefficient rounded to 4 decimals and capped at Tmin + Tdelta; zero from 3 reference SMIC. The reference SMIC stays at its 1 January 2026 value."
+    },
+    "smic_current": {
+      "status": "R",
+      "source": "arrêté of 22 May 2026: 12.31 € an hour from 1 June 2026",
+      "verified": true,
+      "note": "Legal floor for gross wages only; never enters the RGDU formula."
+    },
+    "contributions": {
+      "status": "R",
+      "source": "URSSAF 2026 employer rates; S1 for the 0.49 % cap on the eligible AT/MP part",
+      "verified": true,
+      "note": "Full-time private-sector posts only. The reduced health and family rates no longer exist in 2026. Eligible rates below the ceiling sum to Tmin + Tdelta."
+    },
+    "contributions.other_levies": {
+      "status": "H",
+      "source": "training, apprenticeship tax, PEEC and transport levy; orders of magnitude by size",
+      "verified": false,
+      "note": "Not eligible to the RGDU; shifts the level of labor costs, not the reform."
+    },
+    "bands": {
+      "status": "H",
+      "source": "target: S4, once gross (not net) distributions are at hand",
+      "verified": false,
+      "note": "Representative gross wage of each band, in reference SMIC. S4 publishes net amounts, which are not converted here."
+    }
+  },
+  "rgdu": {
+    "smic_hourly": 12.02,
+    "annual_hours": 1820,
+    "t_min": 0.02,
+    "t_delta_small": 0.3781,
+    "t_delta_large": 0.3821,
+    "exponent": 1.75,
+    "exit_multiple": 3.0,
+    "decimals": 4
+  },
+  "smic_current": {
+    "hourly": 12.31
+  },
+  "contributions": {
+    "pass_annual": 48060.0,
+    "lines": [
+      {"name": "health", "rate": 0.13, "base": "total", "eligible": true},
+      {"name": "old_age_capped", "rate": 0.0855, "base": "capped", "eligible": true},
+      {"name": "old_age_uncapped", "rate": 0.0211, "base": "total", "eligible": true},
+      {"name": "family", "rate": 0.0525, "base": "total", "eligible": true},
+      {"name": "csa", "rate": 0.003, "base": "total", "eligible": true},
+      {"name": "fnal_under_50", "rate": 0.001, "base": "capped", "eligible": true, "large": false},
+      {"name": "fnal_50_plus", "rate": 0.005, "base": "total", "eligible": true, "large": true},
+      {"name": "unemployment", "rate": 0.04, "base": "capped_4", "eligible": true},
+      {"name": "agirc_arrco_t1", "rate": 0.0601, "base": "capped", "eligible": true},
+      {"name": "ags", "rate": 0.0025, "base": "capped_4", "eligible": false},
+      {"name": "agirc_arrco_t2", "rate": 0.1457, "base": "tranche_2", "eligible": false},
+      {"name": "cet", "rate": 0.0021, "base": "above_ceiling", "eligible": false}
+    ],
+    "at_mp_eligible_cap": 0.0049,
+    "other_levies": [0.0123, 0.0318, 0.0363]
+  },
+  "bands": {
+    "bounds_smic": [1.0, 1.3, 2.0, 3.0],
+    "gross_smic": [1.12, 1.6, 2.4, 3.6]
+  }
+}
