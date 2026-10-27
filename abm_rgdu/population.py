@@ -98,6 +98,9 @@ def calibrate(firm, margin, cash_months, p):
     firm.unit_ci = (ci - firm.fixed_cost) / q0
     firm.price = firm.ref_price = revenue / q0
     firm.markup = revenue / (labor + ci) - 1
-    firm.cash = cash_months * (labor + ci) / 3
-    firm.demand_history = [q0, q0]
+    monthly_charges = (labor + ci) / 3
+    firm.cash = cash_months * monthly_charges
+    firm.credit_ceiling = p["finance"]["credit_months"][firm.size] * monthly_charges
+    firm.cash_buffer = p["finance"]["cash_buffer_months"] * monthly_charges
+    firm.demand_history = [q0] * p["demand"]["history"]
     firm.target_margin = margin

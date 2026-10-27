@@ -70,3 +70,90 @@ def test_accounts_identity():
     acc = firms.accounts(price=2.0, output=10.0, unit_ci=0.5, fixed_cost=3.0, maintenance=1.0, labor_cost=7.0)
     assert acc["revenue"] - acc["variable_ci"] - 3.0 - 1.0 == pytest.approx(acc["value_added"])
     assert acc["surplus"] == pytest.approx(acc["value_added"] - 7.0)
+
+
+def _firm(staff, a=0.5, theta=0.4, due=(0, 0), alpha=1.0):
+    profile = payroll.Profile(large=False, size=1, at_mp=0.02)
+    f = firms.Firm(
+        id=0, market=0, size=1, replicate=0, profile=profile, a=a, b=1 - a, theta=theta,
+        ladders=[BandLadder([0.6, 0.3, 0.08, 0.02]), BandLadder([0.3, 0.4, 0.2, 0.1])],
+        staff=np.array(staff), price=1.0, ref_price=1.0, markup=0.1, unit_ci=0.0,
+        fixed_cost=0.0, cash=1e6, machine_capacity=theta * staff[0], initial_output=20.0,
+    )
+    f.due = np.array(due)
+    f.set_costs(payroll.band_costs(alpha, profile, P))
+    return f
+
+
+ADJ = (0.5, 1.25)
+
+
+def test_extra_demand_needing_both_tasks_hires_the_bundle():
+    f = _firm([10, 10])
+    unit_labor = f.amount("cost") / 20.0
+    plan = firms.plan_staff(f, 24.0, 2.0 * unit_labor, [0.0] * 4, ADJ)
+    assert list(plan.hires) == [2, 2]
+    assert plan.output == pytest.approx(24.0)
+    # One post alone adds nothing: B would bind at once. Valued post by post, the
+    # firm would never grow; valued as a bundle, it does.
+    assert capacity(11, 10, 0.0, 0.5, 0.5, 0.4) == capacity(10, 10, 0.0, 0.5, 0.5, 0.4)
+
+
+def test_no_hiring_when_the_bundle_loses_money():
+    f = _firm([10, 10])
+    unit_labor = f.amount("cost") / 20.0
+    plan = firms.plan_staff(f, 24.0, 0.9 * unit_labor, [0.0] * 4, ADJ)
+    assert list(plan.hires) == [0, 0]
+
+
+def test_durably_unprofitable_activity_is_cut_rather_than_kept():
+    f = _firm([10, 10])
+    unit_labor = f.amount("cost") / 20.0
+    plan = firms.plan_staff(f, 20.0, 0.5 * unit_labor, [0.0] * 4, ADJ)
+    assert plan.output < 20.0
+    assert list(plan.hires) == [0, 0]
+    assert plan.target.sum() < 20
+    # Notified posts are still there, and paid, next quarter.
+    assert list(plan.next_staff) == [10, 10]
+
+
+def test_hiring_freeze_allows_no_new_post():
+    f = _firm([10, 10])
+    unit_labor = f.amount("cost") / 20.0
+    plan = firms.plan_staff(f, 24.0, 2.0 * unit_labor, [0.0] * 4, ADJ, allow_hiring=False)
+    assert list(plan.hires) == [0, 0]
+
+
+def test_due_notices_are_cancelled_when_the_posts_are_needed_again():
+    f = _firm([10, 10], due=(2, 0))
+    unit_labor = f.amount("cost") / 20.0
+    plan = firms.plan_staff(f, 20.0, 2.0 * unit_labor, [0.0] * 4, ADJ)
+    assert list(plan.cancel) == [2, 0]
+    assert list(plan.execute) == [0, 0]
+    assert list(plan.hires) == [0, 0]
+
+
+def test_due_notices_are_carried_out_when_demand_stays_low():
+    f = _firm([10, 10], due=(2, 2))
+    unit_labor = f.amount("cost") / 20.0
+    plan = firms.plan_staff(f, 16.0, 2.0 * unit_labor, [0.0] * 4, ADJ)
+    assert list(plan.execute) == [2, 2]
+    assert list(plan.next_staff) == [8, 8]
+
+
+def test_price_target_reproduces_a_calibrated_price():
+    f = _firm([10, 10])
+    f.markup = 0.2
+    f.fixed_cost = 500.0
+    plan = firms.plan_staff(f, 20.0, 10 * f.amount("cost") / 20.0, [0.0] * 4, ADJ)
+    expected = 1.2 * (f.amount("cost") + 500.0) / 20.0
+    assert firms.price_target(f, plan, 0.0) == pytest.approx(expected)
+
+
+def test_financing_available_counts_an_overdraft_once():
+    f = _firm([10, 10])
+    f.cash_buffer, f.credit_ceiling = 50.0, 1000.0
+    f.cash = -100.0
+    assert f.financing_available() == pytest.approx(850.0)
+    f.cash = 300.0
+    assert f.financing_available() == pytest.approx(1250.0)

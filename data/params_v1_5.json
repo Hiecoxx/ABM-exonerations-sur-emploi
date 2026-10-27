@@ -96,6 +96,24 @@
       "source": "orders of magnitude; a proxy, not individual rights",
       "verified": false,
       "note": "Replacement rate applied to the pool's reference wage, share compensated and amount factor by duration bucket (0–1, 2–4, 5+ quarters)."
+    },
+    "finance": {
+      "status": "H",
+      "source": "no source; one exogenous ceiling by size, three levels",
+      "verified": false,
+      "note": "Credit ceiling and cash buffer in months of charges; one interest rate for the overdraft and, later, the investment loan."
+    },
+    "planning": {
+      "status": "H",
+      "source": "severance: legal minimum of a quarter of a month per year of seniority, over about five years",
+      "verified": false,
+      "note": "Planning horizon of the staffing decision, hiring cost per hire and severance per layoff, in months of gross wage."
+    },
+    "simulation": {
+      "status": "H",
+      "source": "convention of the spec: 8 quarters after the reform",
+      "verified": false,
+      "note": "A burn-in at α = 1, with no investment, is shared by every branch of a seed."
     }
   },
   "rgdu": {
@@ -181,5 +199,20 @@
     "replacement_rate": 0.57,
     "share_compensated": [0.70, 0.60, 0.40],
     "amount_factor": [1.0, 1.0, 0.85]
+  },
+  "finance": {
+    "credit_months": [1.0, 2.0, 3.0],
+    "cash_buffer_months": 0.5,
+    "loan_rate": 0.0125
+  },
+  "planning": {
+    "horizon": 4,
+    "hiring_cost_months": 0.5,
+    "severance_months": 1.25
+  },
+  "simulation": {
+    "quarters": 8,
+    "burn_in": 4,
+    "check_invariants": true
   }
 }
