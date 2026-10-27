@@ -100,3 +100,14 @@ def test_command_line_writes_labelled_outputs(tmp_path):
         assert lines[0] == f"# {params.status(p)}"
     validation = (tmp_path / "out" / "validation.csv").read_text(encoding="utf-8")
     assert "not verified" in validation
+
+
+def test_feedback_branches_are_paired_with_their_own_reference():
+    branch_list = [sim.Branch(a, tech, fb) for fb in (False, True) for tech in (True, False) for a in (1.0, 0.8)]
+    res = ex.run_seed(small_world(**FAST, **{"experiments.report_at": [8]}), 2, branch_list)
+    totals = {e["feedback"]: e for e in res["effects"] if e["market"] == ex.ALL and e["size"] == ex.ALL}
+    assert set(totals) == {False, True}
+    for fb, e in totals.items():
+        ref = _level(res | {"levels": [r for r in res["levels"] if r["feedback"] == fb]}, 1.0, False, 8)
+        pol = _level(res | {"levels": [r for r in res["levels"] if r["feedback"] == fb]}, 0.8, False, 8)
+        assert e["dE_without"] == pol["employment"] - ref["employment"]

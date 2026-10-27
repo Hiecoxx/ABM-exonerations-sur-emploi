@@ -92,3 +92,23 @@ def test_reform_without_technology_constructed_case():
     assert price_pol > price_ref
     assert pol.get("firm", "employment")[-1].sum() < ref.get("firm", "employment")[-1].sum()
     assert pol.get("firm", "output")[-1].sum() < ref.get("firm", "output")[-1].sum()
+
+
+def test_budgets_are_exogenous_unless_the_branch_feeds_them_back(warmed):
+    base = np.array([m.budget for m in warmed.markets])
+    off = sim.run(copy.deepcopy(warmed), sim.Branch(0.8, False, False))
+    assert np.allclose(off.get("market", "budget"), base)
+    on = sim.run(copy.deepcopy(warmed), sim.Branch(0.8, False, True))
+    phi = P["demand"]["feedback_phi"]
+    income = np.concatenate([[warmed.income_ref], on.get("public", "income")[:-1]])
+    expected = base[None, :] * ((1 - phi) + phi * income / warmed.income_ref)[:, None]
+    assert on.get("market", "budget") == pytest.approx(expected)
+    # The first quarter of a feedback branch starts from the reference income exactly.
+    assert on.get("market", "budget")[0] == pytest.approx(base)
+
+
+def test_feedback_against_itself_is_exactly_zero(warmed):
+    one = sim.run(copy.deepcopy(warmed), sim.Branch(1.0, False, True))
+    two = sim.run(copy.deepcopy(warmed), sim.Branch(1.0, False, True))
+    for kind, name in (("firm", "employment"), ("market", "budget"), ("public", "balance")):
+        assert np.array_equal(one.get(kind, name), two.get(kind, name))

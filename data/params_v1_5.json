@@ -83,7 +83,7 @@
       "status": "H",
       "source": "no source; experiments at 0 / moderate / high",
       "verified": false,
-      "note": "eta: price sensitivity of customers; lambda: speed at which prices follow costs; spillover: share of unserved demand offered to rivals (0 in the experimental reference)."
+      "note": "eta: price sensitivity of customers; lambda: speed at which prices follow costs; spillover: share of unserved demand offered to rivals (0 in the experimental reference); feedback_phi: weight of last quarter's labor income and ARE in budgets, used only in the feedback branches."
     },
     "labor": {
       "status": "H",
@@ -198,6 +198,7 @@
     "eta": 2.0,
     "lambda": 0.25,
     "spillover": 0.0,
+    "feedback_phi": 0.5,
     "history": 2
   },
   "labor": {

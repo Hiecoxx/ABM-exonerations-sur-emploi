@@ -289,7 +289,7 @@ def main(argv=None):
     p = prm.load(args.params)
     e = p["experiments"]
     seeds = range(args.seeds if args.seeds is not None else e["seeds"])
-    results = run_many(p, seeds, branches(p), args.workers)
+    results = run_many(p, seeds, branches(p, feedback=(False, True)), args.workers)
     levels = [r for res in results for r in res["levels"]]
     effects = [r for res in results for r in res["effects"]]
     out = args.out

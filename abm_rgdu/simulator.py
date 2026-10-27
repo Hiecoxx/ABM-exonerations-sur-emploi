@@ -122,6 +122,19 @@ def _prepare(state, branch):
         f.set_costs(payroll.band_costs(branch.alpha, f.profile, state.params))
 
 
+def budget_factor(state, branch):
+    """Budgets are exogenous, unless the branch lets them follow last quarter's income.
+
+    B_s(t) = B_s × [(1 − φ) + φ × R(t−1) / R_0], with R = gross wages + ARE and R_0
+    taken in the last quarter before the reform. φ is an exploratory sensitivity,
+    not an estimated propensity to consume.
+    """
+    if not branch.feedback:
+        return 1.0
+    phi = state.params["demand"]["feedback_phi"]
+    return (1 - phi) + phi * state.income_last / state.income_ref
+
+
 def step(state, branch, records, invest):
     p = state.params
     t = state.t + 1
@@ -139,7 +152,7 @@ def step(state, branch, records, invest):
                            for f in firms])
 
     # 2–4. Budgets, demand, production.
-    budgets = np.array([m.budget for m in state.markets])
+    budgets = np.array([m.budget for m in state.markets]) * budget_factor(state, branch)
     demand, output, extra, cap, share, weight = (np.zeros(n) for _ in range(6))
     lost, sales = np.zeros(len(state.markets)), np.zeros(len(state.markets))
     for m, budget in zip(state.markets, budgets):
@@ -275,7 +288,7 @@ def step(state, branch, records, invest):
                 "are": are, "hires": hires.sum(axis=0), "separations": separations.sum(axis=0)}
     market_rec = {"budget": budgets, "sales": sales, "lost": lost}
     public = {"contributions": acc["contributions"].sum(), "reduction_applied": reduction_applied.sum(),
-              "are": are.sum(), "balance": balance}
+              "are": are.sum(), "balance": balance, "income": state.income_last}
     records.add(t, firm_rec, pool_rec, market_rec, public)
     state.t = t
     if p["simulation"]["check_invariants"]:
