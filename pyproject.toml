@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "abm-rgdu"
 version = "1.5.0"
 description = "Agent-based model of the RGDU 2026, automation and employment: 120 firms, two tasks, four wage bands, four markets."
+readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = ["numpy>=2.0", "matplotlib>=3.8"]
