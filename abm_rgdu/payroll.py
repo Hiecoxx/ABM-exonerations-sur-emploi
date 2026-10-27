@@ -117,9 +117,25 @@ class BandCosts:
     alpha: float
 
 
-def band_costs(alpha, profile, p):
+def band_costs(alpha, profile, p, wages=None):
     """Annual amounts are computed per post, then put on a quarter by dividing by four."""
-    wages = band_wages(p)
+    wages = band_wages(p) if wages is None else np.asarray(wages, dtype=float)
     contrib = np.array([contributions(w, profile, p)[0] for w in wages])
     red = np.array([reduction(w, profile, p) for w in wages])
     return BandCosts(wages / 4, contrib / 4, red / 4, (wages + contrib - alpha * red) / 4, alpha)
+
+
+def negotiated_wages(alpha, profile, p):
+    """Robustness only: gross wages absorb part of the cut, within a bound, never below the current SMIC.
+
+    The cut of each band is the pass-through share of its extra employer cost,
+    (1 − α) × RGDU, capped at `wage_cut_max` of the wage. One round: the RGDU
+    is then computed again on the new wage, without iterating further.
+    """
+    v = p["variants"]
+    wages = band_wages(p)
+    if v["wage_passthrough"] <= 0 or alpha >= 1:
+        return wages
+    extra = np.array([(1 - alpha) * reduction(w, profile, p) for w in wages])
+    cut = np.minimum(v["wage_cut_max"], v["wage_passthrough"] * extra / wages)
+    return np.maximum(smic_current(p), wages * (1 - cut))

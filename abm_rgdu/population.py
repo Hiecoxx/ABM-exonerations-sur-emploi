@@ -11,7 +11,7 @@ from statistics import NormalDist
 import numpy as np
 
 from . import payroll
-from .firms import A, BandLadder, Firm, capacity, requirements
+from .firms import A, BandLadder, Firm, Machine, capacity, credit_ceiling, requirements, unit_cost_at
 
 _NORMAL = NormalDist()
 
@@ -50,8 +50,11 @@ def _headcount(low, high, routine, rng):
     raise RuntimeError("no headcount found in the size class")
 
 
-def build_firms(p, rng):
+def build_firms(p, rng, stock_rng=None):
+    """`stock_rng` draws the initial stock of machines, on its own stream so that
+    switching the variant on leaves every other draw unchanged."""
     m, s, pop = p["markets"], p["sizes"], p["population"]
+    stock_share = p["technology"]["initial_stock_share"]
     payroll.check_band_wages(p)
     firms = []
     for market in range(len(m["names"])):
@@ -77,30 +80,46 @@ def build_firms(p, rng):
                     price=1.0, ref_price=1.0, markup=0.0, unit_ci=0.0, fixed_cost=0.0, cash=0.0,
                     machine_capacity=theta * staff[A], initial_output=q0,
                 )
+                if stock_rng is not None and stock_rng.random() < stock_share:
+                    install_existing(firm, p)
                 firm.set_costs(payroll.band_costs(1.0, profile, p))
                 calibrate(firm, margin, cash_months, p)
                 firms.append(firm)
     return firms
 
 
+def install_existing(firm, p):
+    """Variant: the machine is already there and paid for, and staff reflects it.
+
+    Tagged `pre-existing`, so that it is never counted as a response to the reform.
+    """
+    tech = p["technology"]
+    cost = unit_cost_at(1, p) * firm.machine_capacity
+    firm.machine = Machine(firm.machine_capacity, cost, tech["maintenance_rate"] * cost, 0.0,
+                           ordered_at=-10**6, active_from=-10**6, origin="pre-existing")
+    firm.staff = np.array(requirements(firm.initial_output, firm.machine_capacity, firm.a, firm.b, firm.theta))
+
+
 def calibrate(firm, margin, cash_months, p):
     """Set price, intermediate consumption and cash from the margin and liquidity draws.
 
     VA = W / (1 − m) so that EBE / VA = m; CA = VA / (VA rate of the market);
-    CI = CA − VA, split into a fixed part and a variable part per unit.
+    CI = CA − VA, split into a fixed part and a variable part per unit. The
+    maintenance of a pre-existing machine is part of the fixed part.
     """
     q0 = firm.initial_output
     labor = firm.amount("cost")
     value_added = labor / (1 - margin)
     revenue = value_added / p["markets"]["va_rate"][firm.market]
     ci = revenue - value_added
-    firm.fixed_cost = p["costs"]["fixed_share_ci"] * ci
-    firm.unit_ci = (ci - firm.fixed_cost) / q0
+    maintenance = firm.machine.maintenance if firm.machine is not None else 0.0
+    firm.fixed_cost = max(0.0, p["costs"]["fixed_share_ci"] * ci - maintenance)
+    firm.unit_ci = (ci - firm.fixed_cost - maintenance) / q0
     firm.price = firm.ref_price = revenue / q0
     firm.markup = revenue / (labor + ci) - 1
     monthly_charges = (labor + ci) / 3
-    firm.cash = cash_months * monthly_charges
-    firm.credit_ceiling = p["finance"]["credit_months"][firm.size] * monthly_charges
+    firm.cash = firm.entry_cash = cash_months * monthly_charges
+    firm.credit_ceiling = credit_ceiling(monthly_charges, firm.size, p)
     firm.cash_buffer = p["finance"]["cash_buffer_months"] * monthly_charges
     firm.demand_history = [q0] * p["demand"]["history"]
     firm.target_margin = margin

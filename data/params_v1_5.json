@@ -126,6 +126,12 @@
       "source": "plan of experiments of the spec, section 8",
       "verified": false,
       "note": "α = 1, 0.9, 0.8, with α = 0 as a separate stress test; outputs at 2, 4 and 8 quarters; the grid crosses tech cost, automatable share and price sensitivity."
+    },
+    "variants": {
+      "status": "H",
+      "source": "robustness checks of the spec, section 5; all off by default",
+      "verified": false,
+      "note": "Closure after quarters beyond the credit ceiling, replaced by an entrant after a delay; gross wages absorbing part of the cut within a bound; also, under finance and technology: credit regime, investment from cash only, tech cost path, initial stock of machines. None of these is to be extrapolated."
     }
   },
   "rgdu": {
@@ -218,7 +224,10 @@
     "cash_buffer_months": 0.5,
     "loan_rate": 0.0125,
     "loan_quarters": 16,
-    "discount_rate": 0.02
+    "discount_rate": 0.02,
+    "credit_mode": "central",
+    "credit_months_rationed": [0.25, 0.5, 1.0],
+    "investment_cash_only": false
   },
   "planning": {
     "horizon": 4,
@@ -237,7 +246,10 @@
     "transition_rate": 0.10,
     "lifetime": 20,
     "npv_horizon": 16,
-    "npv_threshold": 0.0
+    "npv_threshold": 0.0,
+    "cost_path": "stable",
+    "cost_decline": {"stable": 0.0, "moderate": 0.015, "fast": 0.04},
+    "initial_stock_share": 0.0
   },
   "experiments": {
     "seeds": 10,
@@ -251,5 +263,12 @@
       "automatable_scale": [0.5, 1.0, 1.5],
       "eta": [0.0, 2.0, 5.0]
     }
+  },
+  "variants": {
+    "closures": false,
+    "closure_quarters": 2,
+    "replacement_delay": 2,
+    "wage_passthrough": 0.0,
+    "wage_cut_max": 0.02
   }
 }

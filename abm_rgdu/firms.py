@@ -161,6 +161,9 @@ class Firm:
     machine: Machine | None = None
     loan: float = 0.0            # investment loan outstanding
     loan_payment: float = 0.0    # principal due each quarter
+    active: bool = True          # False once closed (robustness variant only)
+    closed_at: int | None = None
+    entry_cash: float = 0.0      # cash an entrant starts with, if the closure variant replaces the firm
     band_costs: payroll.BandCosts | None = None
     tables: CostTables | None = None
 
@@ -319,6 +322,24 @@ def price_target(firm, plan, maintenance):
     return (1 + firm.markup) * (firm.unit_ci + (labor + firm.fixed_cost + maintenance) / plan.output)
 
 
+def unit_cost_at(t, p):
+    """Cost per A post of capacity in quarter t: stable, or falling on an exogenous path.
+
+    The path is the same in every branch; firms do not anticipate it.
+    """
+    tech = p["technology"]
+    return tech["unit_cost"] * (1 - tech["cost_decline"][tech["cost_path"]]) ** max(0, t - 1)
+
+
+def credit_ceiling(monthly_charges, size, p):
+    """Exogenous ceiling by size, under the credit regime of the run."""
+    fin = p["finance"]
+    if fin["credit_mode"] == "free":
+        return math.inf
+    months = fin["credit_months_rationed"] if fin["credit_mode"] == "rationed" else fin["credit_months"]
+    return months[size] * monthly_charges
+
+
 def new_machine(firm, t, unit_cost, p):
     tech = p["technology"]
     cost = unit_cost * firm.machine_capacity
@@ -417,6 +438,8 @@ def financing_path_ok(firm, machine, flows, p):
     """
     fin = p["finance"]
     if firm.financing_available() < machine.cost - 1e-6:
+        return False
+    if fin["investment_cash_only"] and firm.cash - firm.cash_buffer < machine.cost - 1e-6:
         return False
     used = max(0.0, min(machine.cost, firm.cash - firm.cash_buffer))
     loan = firm.loan + machine.cost - used

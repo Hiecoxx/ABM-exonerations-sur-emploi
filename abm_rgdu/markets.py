@@ -34,11 +34,15 @@ def weights(prices, ref_prices, base_share, eta):
 
 
 def shares(prices, ref_prices, base_share, eta, active=None):
-    """share_i ∝ share0_i × (p_i / p_ref_i)^(−η) over active firms, summing to one."""
+    """share_i ∝ share0_i × (p_i / p_ref_i)^(−η) over active firms, summing to one.
+
+    With no active firm at all, nobody gets anything and the budget goes unspent.
+    """
     w = weights(prices, ref_prices, base_share, eta)
     if active is not None:
         w = np.where(active, w, 0.0)
-    return w / w.sum()
+    total = w.sum()
+    return w / total if total > 0 else np.zeros_like(w)
 
 
 def allocate(budget, prices, market_shares):
